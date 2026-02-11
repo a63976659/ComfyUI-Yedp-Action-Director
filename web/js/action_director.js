@@ -1,11 +1,10 @@
 import { app } from "/scripts/app.js";
 import { api } from "/scripts/api.js";
 
-/** * YEDP ACTION DIRECTOR - V8.10 (Matcap Canny Fix)
- * - Fix: Replaced broken Canny Shader with robust 'MeshMatcapMaterial'.
- * - Feat: Generates a procedural 'Rim Light' texture (Black center, White edge) on init.
- * - Logic: Canny pass now uses this Matcap to simulate perfect edge detection.
- * - Logic: Depth pass retains Manual Near/Far controls from V8.9.
+/** * YEDP ACTION DIRECTOR - V8.11 (Normal Map Added)
+ * - Feat: Added Pass 4 for 'Normal Map' using standard 'MeshNormalMaterial'.
+ * - Logic: Normal Map applies to Geo_Depth meshes (body).
+ * - Logic: Retains Canny (Matcap) and Depth (Manual) logic.
  */
 
 // --- DYNAMIC LOADER ---
@@ -24,7 +23,7 @@ const loadThreeJS = async () => {
         };
 
         try {
-            console.log("[Yedp] Initializing Engine (V8.10)...");
+            console.log("[Yedp] Initializing Engine (V8.11)...");
             const THREE = await import("https://esm.sh/three@0.160.0");
             const { OrbitControls } = await import("https://esm.sh/three@0.160.0/examples/jsm/controls/OrbitControls.js?deps=three@0.160.0");
             const { GLTFLoader } = await import("https://esm.sh/three@0.160.0/examples/jsm/loaders/GLTFLoader.js?deps=three@0.160.0");
@@ -69,7 +68,8 @@ class YedpViewport {
 
         // Materials
         this.depthMat = null;
-        this.cannyMat = null; // New Matcap Material
+        this.cannyMat = null; // Matcap
+        this.normalMat = null; // Normal Map
         this.originalMaterials = new Map();
         
         // Manual Depth Control
@@ -98,17 +98,21 @@ class YedpViewport {
             this.GLTFLoaderClass = libs.GLTFLoader;
             this.FBXLoader = libs.FBXLoader; 
 
-            // 1. Create Reusable Depth Material
+            // 1. Reusable Depth Material
             this.depthMat = new this.THREE.MeshDepthMaterial({
                 depthPacking: this.THREE.BasicDepthPacking, // White=Near, Black=Far
                 skinning: true
             });
 
-            // 2. Create Reusable Canny (Matcap) Material
-            // Generates a texture that is Black in middle, White at edges
+            // 2. Reusable Canny (Matcap) Material
             const rimTexture = this.createRimTexture();
             this.cannyMat = new this.THREE.MeshMatcapMaterial({
                 matcap: rimTexture,
+                skinning: true
+            });
+
+            // 3. Reusable Normal Material (Standard RGB Normals)
+            this.normalMat = new this.THREE.MeshNormalMaterial({
                 skinning: true
             });
 
@@ -212,18 +216,14 @@ class YedpViewport {
         canvas.height = 256;
         const ctx = canvas.getContext('2d');
         
-        // Background Black
         ctx.fillStyle = '#000000';
         ctx.fillRect(0, 0, 256, 256);
         
-        // Radial Gradient (Simulating a sphere matcap)
-        // Center = Facing Camera (Black)
-        // Edge = Glancing Angle (White)
         const grad = ctx.createRadialGradient(128, 128, 0, 128, 128, 128);
-        grad.addColorStop(0.0, '#000000'); // Center -> Black
-        grad.addColorStop(0.75, '#000000'); // Stay black for most of the volume
-        grad.addColorStop(0.85, '#666666'); // Smooth falloff
-        grad.addColorStop(1.0, '#ffffff'); // Rim -> White
+        grad.addColorStop(0.0, '#000000'); 
+        grad.addColorStop(0.75, '#000000'); 
+        grad.addColorStop(0.85, '#666666'); 
+        grad.addColorStop(1.0, '#ffffff'); 
         
         ctx.fillStyle = grad;
         ctx.beginPath();
@@ -253,7 +253,7 @@ class YedpViewport {
             </div>
             <div style="display:flex; gap:4px;">
                 <span id="lbl-res" style="color:#00d2ff; font-family:monospace; font-size:10px; margin-right:5px; align-self:center;">512x512</span>
-                <button id="btn-bake" class="yedp-btn" style="border:1px solid #ff0055; color:#ff0055; background:transparent; padding:0px 6px; font-size:10px; cursor:pointer;">BAKE V8.10</button>
+                <button id="btn-bake" class="yedp-btn" style="border:1px solid #ff0055; color:#ff0055; background:transparent; padding:0px 6px; font-size:10px; cursor:pointer;">BAKE V8.11</button>
             </div>
         `;
 
@@ -643,7 +643,7 @@ class YedpViewport {
         const fps = this.getWidgetValue("fps", 24);
         const step = (frames > 0) ? (frames / fps) / frames : 0.033;
         
-        const results = { pose: [], depth: [], canny: [] };
+        const results = { pose: [], depth: [], canny: [], normal: [] };
 
         const visPose = this.poseMeshes.length > 0 && this.poseMeshes[0].visible;
         const visDepth = this.depthMeshes.length > 0 && this.depthMeshes[0].visible;
@@ -658,7 +658,7 @@ class YedpViewport {
 
         const setVisibility = (mode) => {
             const showPose = mode === 'pose';
-            const showDepth = mode === 'depth' || mode === 'canny';
+            const showDepth = mode === 'depth' || mode === 'canny' || mode === 'normal';
             this.poseMeshes.forEach(m => m.visible = showPose);
             this.depthMeshes.forEach(m => m.visible = showDepth);
         };
@@ -748,6 +748,21 @@ class YedpViewport {
 
             captureFrame(results.canny);
             cannyRestores.forEach(o => o.mesh.material = o.mat);
+
+            // --- PASS 4: NORMAL ---
+            this.scene.background = new THREE.Color(0x000000); 
+            setVisibility('normal'); // Same as depth/canny meshes
+            this.resetCamera();
+
+            // Apply Normal Material
+            const normalRestores = [];
+            this.depthMeshes.forEach(m => {
+                normalRestores.push({mesh: m, mat: m.material});
+                m.material = this.normalMat;
+            });
+
+            captureFrame(results.normal);
+            normalRestores.forEach(o => o.mesh.material = o.mat);
             
             await new Promise(r => setTimeout(r, 20));
         }
@@ -777,7 +792,7 @@ class YedpViewport {
         const clientDataWidget = this.node.widgets.find(w => w.name === "client_data");
         if (clientDataWidget) {
             clientDataWidget.value = JSON.stringify(results);
-            console.log("[Yedp] Batch Render Complete (3 Passes).");
+            console.log("[Yedp] Batch Render Complete (4 Passes).");
         }
         
         btn.innerText = "BAKE (DONE)";
