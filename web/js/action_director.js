@@ -1,11 +1,11 @@
 import { app } from "/scripts/app.js";
 import { api } from "/scripts/api.js";
 
-/** * YEDP ACTION DIRECTOR - V8.9 (Manual Depth Control)
- * - Fix: Reverted to Standard Depth Material (Safe/Dark look by default).
- * - Feat: Added Manual 'Near' and 'Far' inputs in UI for user control.
- * - Feat: 'View Depth' checkbox now swaps material in Viewport for Real-time Preview.
- * - Logic: Bake uses User-Defined Near/Far values.
+/** * YEDP ACTION DIRECTOR - V8.10 (Matcap Canny Fix)
+ * - Fix: Replaced broken Canny Shader with robust 'MeshMatcapMaterial'.
+ * - Feat: Generates a procedural 'Rim Light' texture (Black center, White edge) on init.
+ * - Logic: Canny pass now uses this Matcap to simulate perfect edge detection.
+ * - Logic: Depth pass retains Manual Near/Far controls from V8.9.
  */
 
 // --- DYNAMIC LOADER ---
@@ -24,7 +24,7 @@ const loadThreeJS = async () => {
         };
 
         try {
-            console.log("[Yedp] Initializing Engine (V8.9)...");
+            console.log("[Yedp] Initializing Engine (V8.10)...");
             const THREE = await import("https://esm.sh/three@0.160.0");
             const { OrbitControls } = await import("https://esm.sh/three@0.160.0/examples/jsm/controls/OrbitControls.js?deps=three@0.160.0");
             const { GLTFLoader } = await import("https://esm.sh/three@0.160.0/examples/jsm/loaders/GLTFLoader.js?deps=three@0.160.0");
@@ -67,9 +67,12 @@ class YedpViewport {
         this.poseMeshes = [];
         this.depthMeshes = [];
 
-        // Manual Depth Control
+        // Materials
         this.depthMat = null;
+        this.cannyMat = null; // New Matcap Material
         this.originalMaterials = new Map();
+        
+        // Manual Depth Control
         this.isDepthMode = false;
         this.userNear = 0.1;
         this.userFar = 10.0;
@@ -95,9 +98,17 @@ class YedpViewport {
             this.GLTFLoaderClass = libs.GLTFLoader;
             this.FBXLoader = libs.FBXLoader; 
 
-            // Create Reusable Depth Material
+            // 1. Create Reusable Depth Material
             this.depthMat = new this.THREE.MeshDepthMaterial({
                 depthPacking: this.THREE.BasicDepthPacking, // White=Near, Black=Far
+                skinning: true
+            });
+
+            // 2. Create Reusable Canny (Matcap) Material
+            // Generates a texture that is Black in middle, White at edges
+            const rimTexture = this.createRimTexture();
+            this.cannyMat = new this.THREE.MeshMatcapMaterial({
+                matcap: rimTexture,
                 skinning: true
             });
 
@@ -194,15 +205,43 @@ class YedpViewport {
         }
     }
 
+    // --- PROCEDURAL TEXTURE GENERATOR ---
+    createRimTexture() {
+        const canvas = document.createElement('canvas');
+        canvas.width = 256;
+        canvas.height = 256;
+        const ctx = canvas.getContext('2d');
+        
+        // Background Black
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(0, 0, 256, 256);
+        
+        // Radial Gradient (Simulating a sphere matcap)
+        // Center = Facing Camera (Black)
+        // Edge = Glancing Angle (White)
+        const grad = ctx.createRadialGradient(128, 128, 0, 128, 128, 128);
+        grad.addColorStop(0.0, '#000000'); // Center -> Black
+        grad.addColorStop(0.75, '#000000'); // Stay black for most of the volume
+        grad.addColorStop(0.85, '#666666'); // Smooth falloff
+        grad.addColorStop(1.0, '#ffffff'); // Rim -> White
+        
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(128, 128, 128, 0, Math.PI * 2);
+        ctx.fill();
+        
+        const tex = new this.THREE.CanvasTexture(canvas);
+        tex.colorSpace = this.THREE.SRGBColorSpace;
+        return tex;
+    }
+
     setupHeader(div) {
-        // MODIFIED UI: Added Near/Far Inputs
         div.innerHTML = `
             <div style="display:flex; align-items:center; gap:6px;">
                 <label style="color:#ccc; font-size:11px; cursor:pointer; display:flex; align-items:center;">
                     <input type="checkbox" id="chk-depth"> Depth
                 </label>
                 
-                <!-- Manual Depth Controls -->
                 <div id="depth-ctrls" style="display:flex; align-items:center; gap:2px; opacity:0.5; transition:opacity 0.2s;">
                     <span style="color:#666; font-size:10px;">N:</span>
                     <input id="inp-near" type="number" step="0.1" value="0.1" style="width:36px; background:#333; color:#fff; border:1px solid #444; font-size:10px; padding:1px;">
@@ -214,7 +253,7 @@ class YedpViewport {
             </div>
             <div style="display:flex; gap:4px;">
                 <span id="lbl-res" style="color:#00d2ff; font-family:monospace; font-size:10px; margin-right:5px; align-self:center;">512x512</span>
-                <button id="btn-bake" class="yedp-btn" style="border:1px solid #ff0055; color:#ff0055; background:transparent; padding:0px 6px; font-size:10px; cursor:pointer;">BAKE V8.9</button>
+                <button id="btn-bake" class="yedp-btn" style="border:1px solid #ff0055; color:#ff0055; background:transparent; padding:0px 6px; font-size:10px; cursor:pointer;">BAKE V8.10</button>
             </div>
         `;
 
@@ -243,30 +282,25 @@ class YedpViewport {
         div.querySelector("#btn-bake").onclick = () => this.performBatchRender();
     }
 
-    // New Helper: Handle Realtime Depth Preview
     toggleDepthMode(active) {
         this.isDepthMode = active;
         this.depthMeshes.forEach(m => m.visible = active);
         this.poseMeshes.forEach(m => m.visible = !active);
         
         if (active) {
-            // Swap to Depth Material
              this.depthMeshes.forEach(m => {
                  if(m.isMesh && !this.originalMaterials.has(m)) {
                      this.originalMaterials.set(m, m.material);
                  }
                  m.material = this.depthMat;
              });
-             // Apply User Near/Far immediately to see gradient
              this.updateCameraBounds();
         } else {
-            // Restore Original Material
             this.depthMeshes.forEach(m => {
                 if(this.originalMaterials.has(m)) {
                     m.material = this.originalMaterials.get(m);
                 }
             });
-            // Reset Camera to standard viewing
             this.resetCamera();
         }
     }
@@ -579,19 +613,12 @@ class YedpViewport {
         this.isBaking = true;
         this.isPlaying = false;
         
-        // Force switch to Depth Mode logic momentarily to ensure mats are ready if needed, 
-        // but we manage visibility manually below.
-        
-        // 1. Setup Camera for Output
         const originalSize = new THREE.Vector2();
         this.renderer.getSize(originalSize);
         const originalAspect = this.camera.aspect;
         const originalZoom = this.camera.zoom;
         const originalBg = this.scene.background;
-        // Save current camera planes (might be User defined if in depth mode, or Default)
-        const savedNear = this.camera.near;
-        const savedFar = this.camera.far;
-
+        
         // Adjust camera to fill the render target completely
         const vpArea = this.container.querySelector(".yedp-vp-area");
         if (vpArea) {
@@ -618,7 +645,6 @@ class YedpViewport {
         
         const results = { pose: [], depth: [], canny: [] };
 
-        // 2. Prepare Render State (Hide Helpers)
         const visPose = this.poseMeshes.length > 0 && this.poseMeshes[0].visible;
         const visDepth = this.depthMeshes.length > 0 && this.depthMeshes[0].visible;
         const visSkel = this.skeletonHelper ? this.skeletonHelper.visible : false;
@@ -682,12 +708,7 @@ class YedpViewport {
             // --- PASS 1: OPENPOSE ---
             this.scene.background = new THREE.Color(0x000000); 
             setVisibility('pose');
-            
-            // Standard Camera for Pose
-            this.camera.near = this.defaultNear;
-            this.camera.far = this.defaultFar;
-            this.camera.updateProjectionMatrix();
-
+            this.resetCamera(); // Standard View
             const restoreMaterials = swapPoseToUnlit(); 
             captureFrame(results.pose);
             restoreMaterials(); 
@@ -696,7 +717,7 @@ class YedpViewport {
             this.scene.background = new THREE.Color(0x000000);
             setVisibility('depth');
             
-            // Use USER Manual Values for Depth Pass
+            // Use User Manual Values for Depth Pass
             this.camera.near = Math.max(0.01, this.userNear);
             this.camera.far = Math.max(0.1, this.userFar);
             this.camera.updateProjectionMatrix();
@@ -709,23 +730,23 @@ class YedpViewport {
             });
             
             captureFrame(results.depth);
-            
             depthRestores.forEach(o => o.mesh.material = o.mat);
 
-            // --- PASS 3: CANNY (Also uses Depth logic for now) ---
+            // --- PASS 3: CANNY (MATCAP) ---
             this.scene.background = new THREE.Color(0x000000); 
             setVisibility('canny'); 
             
-            // Camera already set to User Values
+            // Revert Camera to Standard (Matcap doesn't need N/F clipping)
+            this.resetCamera();
 
+            // Apply Canny Matcap
             const cannyRestores = [];
             this.depthMeshes.forEach(m => {
                 cannyRestores.push({mesh: m, mat: m.material});
-                m.material = this.depthMat; 
+                m.material = this.cannyMat; // USE THE MATCAP
             });
 
             captureFrame(results.canny);
-            
             cannyRestores.forEach(o => o.mesh.material = o.mat);
             
             await new Promise(r => setTimeout(r, 20));
@@ -736,13 +757,11 @@ class YedpViewport {
         this.camera.aspect = originalAspect;
         this.camera.zoom = originalZoom; 
         
-        // Restore planes based on current mode
         if(this.isDepthMode) {
             this.camera.near = this.userNear;
             this.camera.far = this.userFar;
         } else {
-            this.camera.near = this.defaultNear;
-            this.camera.far = this.defaultFar;
+            this.resetCamera();
         }
         this.camera.updateProjectionMatrix();
 
