@@ -46,8 +46,9 @@ class YedpActionDirector:
             }
         }
 
-    RETURN_TYPES = ("IMAGE", "IMAGE", "IMAGE")
-    RETURN_NAMES = ("POSE_BATCH", "DEPTH_BATCH", "CANNY_BATCH")
+    # UPDATED: Added Image output for Normal Batch
+    RETURN_TYPES = ("IMAGE", "IMAGE", "IMAGE", "IMAGE")
+    RETURN_NAMES = ("POSE_BATCH", "DEPTH_BATCH", "CANNY_BATCH", "NORMAL_BATCH")
     FUNCTION = "render"
     CATEGORY = "Yedp/MoCap"
     
@@ -92,7 +93,7 @@ class YedpActionDirector:
             # Return Red frames to indicate pipeline failure
             red_frame = torch.zeros((1, height, width, 3))
             red_frame[:,:,:,0] = 1.0 
-            return (red_frame, red_frame, red_frame)
+            return (red_frame, red_frame, red_frame, red_frame)
 
         # 2. Parse JSON
         try:
@@ -101,13 +102,14 @@ class YedpActionDirector:
             print(f"[Yedp] JSON Decode Error. Data snippet: {client_data[:50]}...")
             raise ValueError("Failed to parse JSON from client.")
 
-        # 3. Decode Batches
+        # 3. Decode Batches (UPDATED with Normal)
         pose_batch = self.decode_batch(data.get("pose", []), width, height, "pose")
         depth_batch = self.decode_batch(data.get("depth", []), width, height, "depth")
         canny_batch = self.decode_batch(data.get("canny", []), width, height, "canny")
+        normal_batch = self.decode_batch(data.get("normal", []), width, height, "normal")
         
-        print(f"[Yedp] Successfully rendered {len(pose_batch)} frames.")
-        return (pose_batch, depth_batch, canny_batch)
+        print(f"[Yedp] Successfully rendered {len(pose_batch)} frames (4 batches).")
+        return (pose_batch, depth_batch, canny_batch, normal_batch)
 
 # --- API ROUTES ---
 @PromptServer.instance.routes.get("/yedp/get_animations")
