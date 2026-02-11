@@ -1,10 +1,8 @@
 # **🎬 ComfyUI Yedp Action Director**
 
-\<div align="center"\>
 
 **A powerful 3D viewport node for ComfyUI to direct, preview, and batch-render 3D character animations for ControlNet workflows.**
 
-\</div\>
 
 ## **🌟 Overview**
 
@@ -71,9 +69,3 @@ Unlike static image loaders, this node performs the rendering **client-side** (i
 ## **📜 License**
 
 This project is open-source and available under the **MIT License**.
-
-\<div align="center"\>
-
-\<i\>Created by Yann\</i\>
-
-\</div\>
