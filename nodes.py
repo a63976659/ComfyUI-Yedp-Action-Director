@@ -36,7 +36,7 @@ class YedpActionDirector:
                 "width": ("INT", {"default": 512, "min": 64, "max": 4096, "step": 8}),
                 "height": ("INT", {"default": 512, "min": 64, "max": 4096, "step": 8}),
                 "frame_count": ("INT", {"default": 24, "min": 1, "max": 3000}),
-                "fps": ("INT", {"default": 24, "min": 1, "max": 60}),
+                "fps": ("INT", {"default": 30, "min": 1, "max": 60}),
                 # MOVED TO REQUIRED: This allows the JS to find the widget and write data to it.
                 # We use multiline=False to keep the UI cleaner, though it will be filled with text.
                 "client_data": ("STRING", {"default": "", "multiline": False}), 
@@ -118,3 +118,4 @@ async def get_animations(request):
     if not files:
         files = []
     return web.json_response({"files": files})
+
