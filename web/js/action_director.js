@@ -1,10 +1,11 @@
 import { app } from "/scripts/app.js";
 import { api } from "/scripts/api.js";
 
-/** * YEDP ACTION DIRECTOR - V8.16 (Final Polish)
- * - Fix: Increased bottom padding in 'onResize' to 35px.
- * - Result: Viewport now stops before the resize handle, preventing "pop out".
- * - Logic: Retains infinite scaling and dynamic widget height calculation.
+/** * YEDP ACTION DIRECTOR - V8.18 (JPEG Enforcer)
+ * - Fix: Solved issue where browser fell back to PNG export despite JPEG request.
+ * - Logic: Added intermediate 2D canvas to flatten WebGL buffer before export.
+ * - Optimization: Reduced default JPEG quality to 0.85 for Depth/Canny/Normal (significant size reduction).
+ * - Result: Guaranteed JPEG output for secondary passes.
  */
 
 // --- DYNAMIC LOADER ---
@@ -23,7 +24,7 @@ const loadThreeJS = async () => {
         };
 
         try {
-            console.log("[Yedp] Initializing Engine (V8.16)...");
+            console.log("[Yedp] Initializing Engine (V8.18)...");
             const THREE = await import("https://esm.sh/three@0.160.0");
             const { OrbitControls } = await import("https://esm.sh/three@0.160.0/examples/jsm/controls/OrbitControls.js?deps=three@0.160.0");
             const { GLTFLoader } = await import("https://esm.sh/three@0.160.0/examples/jsm/loaders/GLTFLoader.js?deps=three@0.160.0");
@@ -253,7 +254,7 @@ class YedpViewport {
             </div>
             <div style="display:flex; gap:4px;">
                 <span id="lbl-res" style="color:#00d2ff; font-family:monospace; font-size:10px; margin-right:5px; align-self:center;">512x512</span>
-                <button id="btn-bake" class="yedp-btn" style="border:1px solid #ff0055; color:#ff0055; background:transparent; padding:0px 6px; font-size:10px; cursor:pointer;">BAKE V8.16</button>
+                <button id="btn-bake" class="yedp-btn" style="border:1px solid #ff0055; color:#ff0055; background:transparent; padding:0px 6px; font-size:10px; cursor:pointer;">BAKE V8.18</button>
             </div>
         `;
 
@@ -689,11 +690,29 @@ class YedpViewport {
             };
         };
 
-        const captureFrame = (array) => {
+        // NEW: Intermediate Canvas for Robust JPEG Compression
+        const compressCanvas = document.createElement("canvas");
+        compressCanvas.width = this.renderWidth;
+        compressCanvas.height = this.renderHeight;
+        const compressCtx = compressCanvas.getContext("2d");
+
+        // MODIFIED: Support compression params via intermediate canvas to guarantee JPEG format
+        const captureFrame = (array, mimeType = "image/png", quality = undefined) => {
             this.renderer.render(this.scene, this.camera);
             const gl = this.renderer.getContext();
             gl.finish(); 
-            array.push(this.renderer.domElement.toDataURL("image/png"));
+            
+            if (mimeType === "image/jpeg") {
+                // Draw to 2D canvas -> Flatten Alpha -> Force JPEG
+                // This prevents browser fallback to PNG if WebGL context has alpha quirks
+                compressCtx.fillStyle = "#000000";
+                compressCtx.fillRect(0, 0, this.renderWidth, this.renderHeight);
+                compressCtx.drawImage(this.renderer.domElement, 0, 0);
+                array.push(compressCanvas.toDataURL(mimeType, quality));
+            } else {
+                // PNG (OpenPose) needs to be exact, so we grab directly from WebGL
+                array.push(this.renderer.domElement.toDataURL(mimeType));
+            }
         };
 
         // 3. Render Loop
@@ -705,15 +724,16 @@ class YedpViewport {
             }
             this.character.updateMatrixWorld(true);
 
-            // --- PASS 1: OPENPOSE ---
+            // --- PASS 1: OPENPOSE (PNG REQUIRED FOR PRECISE COLORS) ---
             this.scene.background = new THREE.Color(0x000000); 
             setVisibility('pose');
             this.resetCamera(); // Standard View
             const restoreMaterials = swapPoseToUnlit(); 
-            captureFrame(results.pose);
+            // Keep PNG for Pose to prevent JPEG artifacts on color codes
+            captureFrame(results.pose, "image/png"); 
             restoreMaterials(); 
 
-            // --- PASS 2: DEPTH ---
+            // --- PASS 2: DEPTH (JPEG SAFE - GRADIENTS) ---
             this.scene.background = new THREE.Color(0x000000);
             setVisibility('depth');
             
@@ -729,10 +749,11 @@ class YedpViewport {
                 m.material = this.depthMat;
             });
             
-            captureFrame(results.depth);
+            // JPEG 0.85 is extremely efficient for depth maps
+            captureFrame(results.depth, "image/jpeg", 0.85);
             depthRestores.forEach(o => o.mesh.material = o.mat);
 
-            // --- PASS 3: CANNY (MATCAP) ---
+            // --- PASS 3: CANNY (JPEG SAFE) ---
             this.scene.background = new THREE.Color(0x000000); 
             setVisibility('canny'); 
             
@@ -746,10 +767,10 @@ class YedpViewport {
                 m.material = this.cannyMat; // USE THE MATCAP
             });
 
-            captureFrame(results.canny);
+            captureFrame(results.canny, "image/jpeg", 0.85);
             cannyRestores.forEach(o => o.mesh.material = o.mat);
 
-            // --- PASS 4: NORMAL ---
+            // --- PASS 4: NORMAL (JPEG SAFE) ---
             this.scene.background = new THREE.Color(0x000000); 
             setVisibility('normal'); // Same as depth/canny meshes
             this.resetCamera();
@@ -761,7 +782,7 @@ class YedpViewport {
                 m.material = this.normalMat;
             });
 
-            captureFrame(results.normal);
+            captureFrame(results.normal, "image/jpeg", 0.85);
             normalRestores.forEach(o => o.mesh.material = o.mat);
             
             await new Promise(r => setTimeout(r, 20));
