@@ -1,11 +1,15 @@
 import { app } from "/scripts/app.js";
 import { api } from "/scripts/api.js";
 
-/** * YEDP ACTION DIRECTOR - V8.18 (JPEG Enforcer)
+/** * YEDP ACTION DIRECTOR - V8.19 (HY-Motion + BVH Center Fix)
  * - Fix: Solved issue where browser fell back to PNG export despite JPEG request.
  * - Logic: Added intermediate 2D canvas to flatten WebGL buffer before export.
  * - Optimization: Reduced default JPEG quality to 0.85 for Depth/Canny/Normal (significant size reduction).
  * - Result: Guaranteed JPEG output for secondary passes.
+ * - Update: Added Universal Bone Mapping Dictionary for maximum rig compatibility (VRoid, UE, Blender, etc.)
+ * - Update: Added BVH format support for raw MoCap animation imports.
+ * - Update: Expanded mapping for SMPL-H (HY-Motion) standards (collars vs shoulders, hips vs uplegs).
+ * - Fix: Dynamic BVH scaling and automatic origin-centering for root position.
  */
 
 // --- DYNAMIC LOADER ---
@@ -24,14 +28,15 @@ const loadThreeJS = async () => {
         };
 
         try {
-            console.log("[Yedp] Initializing Engine (V8.18)...");
+            console.log("[Yedp] Initializing Engine (V8.19+)...");
             const THREE = await import("https://esm.sh/three@0.160.0");
             const { OrbitControls } = await import("https://esm.sh/three@0.160.0/examples/jsm/controls/OrbitControls.js?deps=three@0.160.0");
             const { GLTFLoader } = await import("https://esm.sh/three@0.160.0/examples/jsm/loaders/GLTFLoader.js?deps=three@0.160.0");
             await import("https://esm.sh/fflate@0.8.0"); 
             const { FBXLoader } = await import("https://esm.sh/three@0.160.0/examples/jsm/loaders/FBXLoader.js?deps=three@0.160.0");
+            const { BVHLoader } = await import("https://esm.sh/three@0.160.0/examples/jsm/loaders/BVHLoader.js?deps=three@0.160.0");
 
-            resolve({ THREE, OrbitControls, GLTFLoader, FBXLoader });
+            resolve({ THREE, OrbitControls, GLTFLoader, FBXLoader, BVHLoader });
         } catch (e) {
             console.error("[Yedp] Critical Engine Load Failure:", e);
             reject(e);
@@ -39,9 +44,123 @@ const loadThreeJS = async () => {
     });
 };
 
+// --- UNIVERSAL BONE MAPPING DICTIONARY ---
+const { BONE_MAP, BONE_KEYS_SORTED } = (() => {
+    const map = {};
+    const synonyms = {
+        "hips": ["hips", "pelvis", "root", "cg", "center"],
+        "spine": ["spine", "spine0", "spine00", "abdomen", "waist", "lowerback"],
+        "spine1": ["spine1", "spine01", "spine001", "chest", "chest1", "torso1", "middleback"],
+        "spine2": ["spine2", "spine02", "spine002", "upperchest", "chest2", "torso2", "upperback"],
+        "spine3": ["spine3", "spine03", "spine003", "chest3", "torso3"],
+        "neck": ["neck", "neck0", "neck00", "cervical"],
+        "head": ["head"],
+
+        "leftshoulder": ["leftshoulder", "lshoulder", "shoulderl", "lclavicle", "claviclel", "leftcollar", "lcollar", "collarl"],
+        "leftarm": ["leftarm", "larm", "arml", "leftuparm", "luparm", "uparml", "leftupperarm", "lupperarm", "upperarml", "lshldr", "leftbicep"],
+        "leftforearm": ["leftforearm", "lforearm", "forearml", "leftelbow", "lelbow", "elbowl", "leftlowerarm", "llowerarm", "lowerarml"],
+        "lefthand": ["lefthand", "lhand", "handl", "leftwrist", "lwrist", "wristl"],
+
+        "rightshoulder": ["rightshoulder", "rshoulder", "shoulderr", "rclavicle", "clavicler", "rightcollar", "rcollar", "collarr"],
+        "rightarm": ["rightarm", "rarm", "armr", "rightuparm", "ruparm", "uparmr", "rightupperarm", "rupperarm", "upperarmr", "rshldr", "rightbicep"],
+        "rightforearm": ["rightforearm", "rforearm", "forearmr", "rightelbow", "relbow", "elbowr", "rightlowerarm", "rlowerarm", "lowerarmr"],
+        "righthand": ["righthand", "rhand", "handr", "rightwrist", "rwrist", "wristr"],
+
+        "leftupleg": ["leftupleg", "lupleg", "uplegl", "leftthigh", "lthigh", "thighl", "leftupperleg", "lupperleg", "upperlegl", "lefthip", "lhip", "hip_l"],
+        "leftleg": ["leftleg", "lleg", "legl", "leftcalf", "lcalf", "calfl", "leftknee", "lknee", "kneel", "leftlowerleg", "llowerleg", "lowerlegl", "lshin", "shinl"],
+        "leftfoot": ["leftfoot", "lfoot", "footl", "leftankle", "lankle", "anklel"],
+        "lefttoebase": ["lefttoebase", "ltoebase", "toebasel", "lefttoe", "ltoe", "toel", "lefttoes", "ltoes", "toesl", "leftfootball", "lfootball", "footballl"],
+
+        "rightupleg": ["rightupleg", "rupleg", "uplegr", "rightthigh", "rthigh", "thighr", "rightupperleg", "rupperleg", "upperlegr", "righthip", "rhip", "hip_r"],
+        "rightleg": ["rightleg", "rleg", "legr", "rightcalf", "rcalf", "calfr", "rightknee", "rknee", "kneer", "rightlowerleg", "rlowerleg", "lowerlegr", "rshin", "shinr"],
+        "rightfoot": ["rightfoot", "rfoot", "footr", "rightankle", "rankle", "ankler"],
+        "righttoebase": ["righttoebase", "rtoebase", "toebaser", "righttoe", "rtoe", "toer", "righttoes", "rtoes", "toesr", "rightfootball", "rfootball", "footballr"]
+    };
+
+    // Construct flat lookup dictionary
+    for (const [canonical, synList] of Object.entries(synonyms)) {
+        map[canonical] = canonical;
+        for (const syn of synList) {
+            map[syn] = canonical;
+        }
+    }
+
+    // Procedurally map fingers to maintain exact parity across 30+ variants
+    const fingers = ["thumb", "index", "middle", "ring", "pinky"];
+    const sides = [
+        { canon: "lefthand", shorts: ["l", "left"] },
+        { canon: "righthand", shorts: ["r", "right"] }
+    ];
+
+    sides.forEach(side => {
+        fingers.forEach(finger => {
+            for (let i = 1; i <= 4; i++) {
+                const canonical = `${side.canon}${finger}${i}`;
+                map[canonical] = canonical;
+                side.shorts.forEach(s => {
+                    map[`${s}${finger}${i}`] = canonical;
+                    map[`${finger}${i}${s}`] = canonical;
+                    map[`${s}${finger}0${i}`] = canonical;
+                    if (finger === "pinky") {
+                        map[`${s}little${i}`] = canonical;
+                        map[`little${i}${s}`] = canonical;
+                        map[`${s}pinkie${i}`] = canonical;
+                    }
+                });
+            }
+        });
+    });
+
+    // Sort keys by length (longest first) to allow accurate suffix matching
+    const sortedKeys = Object.keys(map).sort((a, b) => b.length - a.length);
+
+    return { BONE_MAP: map, BONE_KEYS_SORTED: sortedKeys };
+})();
+
+// Improved universal string normalization for robust animation mapping
 const semanticNormalize = (name) => {
     if (!name) return "";
-    return name.split(/[/:_|]/).pop().replace(/mixamorig\d*/i, "").replace(/mixamo/i, "").replace(/\s+/g, "").toLowerCase();
+    
+    // 1. Safely extract core name from namespaces (e.g., 'mixamorig:Hips' -> 'Hips')
+    let clean = name.split(/[:/|]/).pop();
+
+    // 2. SMPL-H / HY-Motion Specific Intercepts
+    // We catch these BEFORE stripping underscores because SMPL uses different semantic meaning
+    // for "shoulder" (upper arm), "foot" (toebase), etc., compared to Mixamo conventions.
+    // By using the underscore as a signature, we fix HY-Motion without breaking standard Mixamo rigs.
+    const lower = clean.toLowerCase();
+    if (lower === "l_foot" || lower === "left_foot") return BONE_MAP["lefttoebase"];
+    if (lower === "r_foot" || lower === "right_foot") return BONE_MAP["righttoebase"];
+    if (lower === "l_ankle" || lower === "left_ankle") return BONE_MAP["leftfoot"];
+    if (lower === "r_ankle" || lower === "right_ankle") return BONE_MAP["rightfoot"];
+    if (lower === "l_hip" || lower === "left_hip") return BONE_MAP["leftupleg"];
+    if (lower === "r_hip" || lower === "right_hip") return BONE_MAP["rightupleg"];
+    if (lower === "l_collar" || lower === "left_collar") return BONE_MAP["leftshoulder"];
+    if (lower === "r_collar" || lower === "right_collar") return BONE_MAP["rightshoulder"];
+    if (lower === "l_shoulder" || lower === "left_shoulder") return BONE_MAP["leftarm"];
+    if (lower === "r_shoulder" || lower === "right_shoulder") return BONE_MAP["rightarm"];
+
+    // 3. Strip common rig prefixes (UE, VRoid, Blender, CC3) and suffixes (IK, FK)
+    // Also stripping out brackets [ ] in case of Three.js BVH property bindings
+    clean = clean.replace(/^(b_|j_bip_|bip_|cc_base_|def_|org_|mch_|mixamorig\d*_?|mixamo_?)/i, "")
+                 .replace(/(ik|fk|nub|end|twist\d*)$/i, "")
+                 .replace(/[\s\-_.[\]]+/g, "")
+                 .toLowerCase();
+
+    // 4. Direct dictionary match for known standard names
+    if (BONE_MAP[clean]) {
+        return BONE_MAP[clean];
+    }
+
+    // 5. Fallback Suffix Match (Handles prepended custom names like "MyChar_L_Shoulder")
+    for (const key of BONE_KEYS_SORTED) {
+        if (clean.endsWith(key)) {
+            return BONE_MAP[key];
+        }
+    }
+
+    // 6. If fully unknown (e.g., facial bones), return cleaned string
+    return clean;
 };
 
 class YedpViewport {
@@ -98,6 +217,7 @@ class YedpViewport {
             this.OrbitControls = libs.OrbitControls;
             this.GLTFLoaderClass = libs.GLTFLoader;
             this.FBXLoader = libs.FBXLoader; 
+            this.BVHLoader = libs.BVHLoader;
 
             // 1. Reusable Depth Material
             this.depthMat = new this.THREE.MeshDepthMaterial({
@@ -507,6 +627,7 @@ class YedpViewport {
     async loadAnimation(filename) {
         if(!this.mixer || !filename || filename === "Scanning...") return;
         const isFBX = filename.toLowerCase().endsWith(".fbx");
+        const isBVH = filename.toLowerCase().endsWith(".bvh");
         const url = `/view?filename=${filename}&type=input&subfolder=yedp_anims`;
         
         try {
@@ -514,11 +635,22 @@ class YedpViewport {
             if(isFBX) {
                 if(!this.FBXLoader) throw new Error("FBXLoader missing.");
                 model = await new this.FBXLoader().loadAsync(url);
+            } else if (isBVH) {
+                if(!this.BVHLoader) throw new Error("BVHLoader missing.");
+                model = await new this.BVHLoader().loadAsync(url);
             } else {
                 model = await new this.GLTFLoaderClass().loadAsync(url);
             }
 
-            let clip = model.animations?.[0] || model.scene?.animations?.[0] || model.asset?.animations?.[0];
+            // For BVH, the animation is usually in model.clip.
+            // For FBX/GLTF, it's typically within an animations array.
+            let clip;
+            if (isBVH) {
+                clip = model.clip;
+            } else {
+                clip = model.animations?.[0] || model.scene?.animations?.[0] || model.asset?.animations?.[0];
+            }
+
             if(clip) {
                 const tracks = [];
 
@@ -532,17 +664,37 @@ class YedpViewport {
 
                     if(this.semanticMap.has(normalizedTrackBone)) {
                         const targetRealName = this.semanticMap.get(normalizedTrackBone);
+                        const tc = t.clone(); // Clone first before modifying values
+                        
                         if (prop === "position") {
                              const lowerName = targetRealName.toLowerCase();
+                             // Drop position tracking for non-root bones completely 
                              if (!lowerName.includes("hips") && !lowerName.includes("root") && !lowerName.includes("pelvis")) return;
-                             if (t.values.length >= 2) {
-                                 const valY = Math.abs(t.values[1]);
-                                 if (valY > 50) {
-                                     for(let k=0; k<t.values.length; k++) t.values[k] *= 0.01;
+                             
+                             // BVH/FBX Global Position Fix (Scale to meters + Center X/Z to origin)
+                             if (tc.values.length >= 3) {
+                                 let maxY = 0;
+                                 for (let k = 1; k < tc.values.length; k += 3) {
+                                     if (Math.abs(tc.values[k]) > maxY) maxY = Math.abs(tc.values[k]);
+                                 }
+                                 
+                                 // Detect unit scaling (cm / dm vs meters)
+                                 let scaleFactor = 1.0;
+                                 if (maxY > 50) scaleFactor = 0.01;
+                                 else if (maxY > 5) scaleFactor = 0.1;
+
+                                 // Get starting position to offset character perfectly into the viewport center
+                                 const startX = tc.values[0] * scaleFactor;
+                                 const startZ = tc.values[2] * scaleFactor;
+
+                                 for (let k = 0; k < tc.values.length; k += 3) {
+                                     tc.values[k] = (tc.values[k] * scaleFactor) - startX;     // X: Scale and Center
+                                     tc.values[k+1] = tc.values[k+1] * scaleFactor;            // Y: Scale only (preserve height)
+                                     tc.values[k+2] = (tc.values[k+2] * scaleFactor) - startZ; // Z: Scale and Center
                                  }
                              }
                         }
-                        const tc = t.clone();
+                        
                         tc.name = `${targetRealName}.${prop}`;
                         tracks.push(tc);
                     }
