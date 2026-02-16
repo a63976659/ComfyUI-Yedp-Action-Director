@@ -64,6 +64,8 @@ Unlike static image loaders, this node performs the rendering **client-side** (i
 
 ## **🐛 Troubleshooting**
 
+* **"animation not playing":**  
+  * the node has been built to play animations from mixamo, the rig needs to follow a similar prefix structure and a few known synonyms such as "Pelvis" for "Hips" (things such as mixamo:Hips/(prefix)_Hips should be recognized fine). Support for HY-MOTION rig name convention has also been added recently.
 * **"Viewport is invisible on load":**  
   * *Solution:* Depending on your browser zoom, the viewport might initialize at size 0\. Simply **resize the node slightly** by dragging the bottom-right corner, and the viewport will snap into place.  
 * **"Animation not found":**  
