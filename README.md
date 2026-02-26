@@ -63,7 +63,7 @@ The entire architecture has been rebuilt from the ground up for maximum performa
 ### **2\. Character Management**
 
 * Click **\+ Add Char** to spawn a new character into the scene.  
-* Select a character from the list and use the **Gizmo Tools** (Move, Rotate, Scale) to place them in the 3D viewport.  
+* Select a character from the list and use the **Gizmo Tools** (Move, Rotate, Scale) to place them in the 3D viewport (MAKE SURE TO PRESS THE "DESELECT" ONCE YOU ARE DONE).  
 * Assign an animation from the dropdown (automatically reads from your input/yedp_anims folder).  
 * Toggle the **Loop** checkbox. The duration of the specific animation is displayed in frames (e.g., 52f).
 
