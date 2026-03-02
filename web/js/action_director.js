@@ -1,7 +1,7 @@
 import { app } from "/scripts/app.js";
 import { api } from "/scripts/api.js";
 
-/** * YEDP ACTION DIRECTOR - V9.16 (Full Scene Control)
+/** * YEDP ACTION DIRECTOR - V9.18 (Full Scene Control)
  * - Added: Support for up to 4 characters in the same scene.
  * - Added: TransformControls for moving and rotating characters individually.
  * - Added: Sidebar UI for independent character animation selection and looping.
@@ -32,6 +32,8 @@ import { api } from "/scripts/api.js";
  * - Update (9.14): Added Shaded toggle (Clay mode), Transform Panel (Pos/Rot/Scale X,Y,Z), Lighting Category (Ambient, Dir, Point, Spot + Shadows), and Single Frame Bake.
  * - Update (9.15): Converted OpenPose meshes to BasicMaterial for unlit accurate preview, fixed Shaded mode to correctly display depth geometry, added Shaded output pass.
  * - Update (9.16): Fixed camera target offset when rotating via Transform UI. Added live sync between viewport and text inputs. Fixed FOV UI layout.
+ * - Update (9.17): Upgraded light helpers to distinct visual icons (Arrows, Cones, Circles) and made Shaded/Depth toggles mutually exclusive.
+ * - Fix (9.18): Fixed spotlight helper cone orientation to properly point and open along the light's direction.
  */
 
 const loadThreeJS = async () => {
@@ -40,7 +42,7 @@ const loadThreeJS = async () => {
     return window._YEDP_THREE_CACHE = new Promise(async (resolve, reject) => {
         const baseUrl = new URL(".", import.meta.url).href;
         try {
-            console.log("[Yedp] Initializing Engine V9.16 (Offline Mode)...");
+            console.log("[Yedp] Initializing Engine V9.18 (Offline Mode)...");
             
             // Loaded locally from the same folder
             const THREE = await import(new URL("./three.module.js", baseUrl).href);
@@ -457,8 +459,9 @@ class YedpViewport {
             // Add default lights
             this.addLight("ambient");
             this.addLight("directional");
-            const dl = this.lights[1].light;
+            const dl = this.lights[1].group; // Light targets are now local, move the group
             dl.position.set(2, 4, 3);
+            dl.lookAt(0, 0, 0); // Point down towards center
             
             await this.fetchAnimations();
             await this.loadBaseRig();
@@ -510,21 +513,36 @@ class YedpViewport {
             <div style="display:flex; gap:4px;">
                 <span id="lbl-res" style="color:#00d2ff; font-family:monospace; font-size:10px; margin-right:5px; align-self:center;">512x512</span>
                 <button id="btn-bake-frame" style="border:1px solid #ffaa00; color:#ffaa00; background:transparent; padding:0px 6px; font-size:10px; cursor:pointer; border-radius:3px;">BAKE FRAME</button>
-                <button id="btn-bake" style="border:1px solid #ff0055; color:#ff0055; background:transparent; padding:0px 6px; font-size:10px; cursor:pointer; border-radius:3px;">BAKE V9.16</button>
+                <button id="btn-bake" style="border:1px solid #ff0055; color:#ff0055; background:transparent; padding:0px 6px; font-size:10px; cursor:pointer; border-radius:3px;">BAKE V9.18</button>
             </div>
         `;
 
-        div.querySelector("#chk-shaded").onchange = (e) => { 
+        const chkShaded = div.querySelector("#chk-shaded");
+        const chkDepth = div.querySelector("#chk-depth");
+
+        chkShaded.onchange = (e) => { 
+            if (e.target.checked && chkDepth.checked) {
+                chkDepth.checked = false;
+                this.isDepthMode = false;
+                div.querySelector("#depth-ctrls").style.opacity = "0.5";
+            }
             this.isShadedMode = e.target.checked; 
             this.updateVisibilities(); 
         };
-        div.querySelector("#inp-near").onchange = (e) => { this.userNear = parseFloat(e.target.value); if(this.isDepthMode) this.updateCameraBounds(); };
-        div.querySelector("#inp-far").onchange = (e) => { this.userFar = parseFloat(e.target.value); if(this.isDepthMode) this.updateCameraBounds(); };
-        div.querySelector("#chk-depth").onchange = (e) => {
+        
+        chkDepth.onchange = (e) => {
+            if (e.target.checked && chkShaded.checked) {
+                chkShaded.checked = false;
+                this.isShadedMode = false;
+            }
             this.isDepthMode = e.target.checked;
             div.querySelector("#depth-ctrls").style.opacity = this.isDepthMode ? "1.0" : "0.5";
             this.updateVisibilities();
         };
+
+        div.querySelector("#inp-near").onchange = (e) => { this.userNear = parseFloat(e.target.value); if(this.isDepthMode) this.updateCameraBounds(); };
+        div.querySelector("#inp-far").onchange = (e) => { this.userFar = parseFloat(e.target.value); if(this.isDepthMode) this.updateCameraBounds(); };
+        
         div.querySelector("#chk-skel").onchange = (e) => {
             this.characters.forEach(c => { if(c.skeletonHelper) c.skeletonHelper.visible = e.target.checked; });
         };
@@ -989,13 +1007,8 @@ class YedpViewport {
         
         const group = new this.THREE.Group();
         group.position.set(0, 2, 2);
-        
-        const helperMat = new this.THREE.MeshBasicMaterial({color:0xffaa00, wireframe:true});
-        const helperGeo = new this.THREE.SphereGeometry(0.15, 4, 4);
-        const helper = new this.THREE.Mesh(helperGeo, helperMat);
-        group.add(helper);
 
-        const lObj = { id, group, helper, light: null, type: presetType, color: '#ffffff', intensity: 1.0, range: 10, angle: 45, castShadow: true };
+        const lObj = { id, group, helper: null, light: null, type: presetType, color: '#ffffff', intensity: 1.0, range: 10, angle: 45, castShadow: true };
         this.lights.push(lObj);
         this.scene.add(group);
         
@@ -1015,6 +1028,7 @@ class YedpViewport {
 
     updateLightType(lObj) {
         if (lObj.light) lObj.group.remove(lObj.light);
+        if (lObj.helper) lObj.group.remove(lObj.helper);
         
         const c = new this.THREE.Color(lObj.color);
         switch(lObj.type) {
@@ -1024,6 +1038,33 @@ class YedpViewport {
             case 'spot': 
                 lObj.light = new this.THREE.SpotLight(c, lObj.intensity, lObj.range, this.THREE.MathUtils.degToRad(lObj.angle), 0.5, 1); 
                 break;
+        }
+
+        // Lock light targets to the group so they rotate seamlessly via TransformControls
+        if (lObj.type === 'directional' || lObj.type === 'spot') {
+            lObj.light.target.position.set(0, 0, -1);
+            lObj.group.add(lObj.light.target);
+        }
+
+        // Distinct Visual Helpers
+        const helperMat = new this.THREE.MeshBasicMaterial({color:0xffaa00, wireframe:true});
+        if (lObj.type === 'point') {
+            lObj.helper = new this.THREE.Mesh(new this.THREE.SphereGeometry(0.2, 8, 8), helperMat);
+        } else if (lObj.type === 'spot') {
+            lObj.helper = new this.THREE.Mesh(new this.THREE.ConeGeometry(0.3, 0.6, 8, 1, true), helperMat);
+            lObj.helper.rotation.x = Math.PI / 2; // Fixed: Opens down local -Z
+            lObj.helper.position.z = -0.3;
+        } else if (lObj.type === 'directional') {
+            lObj.helper = new this.THREE.Group();
+            const shaft = new this.THREE.Mesh(new this.THREE.CylinderGeometry(0.02, 0.02, 0.4), helperMat);
+            shaft.rotation.x = Math.PI / 2;
+            shaft.position.z = -0.2;
+            const head = new this.THREE.Mesh(new this.THREE.ConeGeometry(0.1, 0.2), helperMat);
+            head.rotation.x = -Math.PI / 2;
+            head.position.z = -0.5;
+            lObj.helper.add(shaft, head);
+        } else {
+            lObj.helper = new this.THREE.Group(); // Empty for ambient
         }
         
         if (lObj.type !== 'ambient') {
@@ -1035,6 +1076,7 @@ class YedpViewport {
         }
         
         lObj.group.add(lObj.light);
+        lObj.group.add(lObj.helper);
         lObj.helper.visible = lObj.type !== 'ambient'; 
     }
 
@@ -1510,7 +1552,7 @@ class YedpViewport {
         const THREE = this.THREE;
         
         const btnId = isSingleFrame ? '#btn-bake-frame' : '#btn-bake';
-        const originalBtnText = isSingleFrame ? 'BAKE FRAME' : 'BAKE V9.16';
+        const originalBtnText = isSingleFrame ? 'BAKE FRAME' : 'BAKE V9.18';
         const btn = this.container.querySelector(btnId);
         btn.innerText = "PREPARING...";
         
