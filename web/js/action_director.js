@@ -27,6 +27,7 @@ import { api } from "/scripts/api.js";
  * - Update (Offline): Pointed all imports to the same local directory.
  * - Fix (9.11): Ensured "none" is always available in animation lists to fix UI default-selection mismatches.
  * - Fix (9.11): Forcefully hide the skeleton during all baking passes to prevent contamination of the OpenPose render.
+ * - Update (9.12): Overhauled UI with floating Gizmo icons, Blender shortcuts, collapsible right menus, and high-visibility Depth inputs.
  */
 
 const loadThreeJS = async () => {
@@ -278,6 +279,10 @@ class YedpViewport {
         this.uiSidebar = null;
         this.uiCharList = null;
 
+        this.isHovered = false;
+        this._handleKeyDown = this.handleKeyDown.bind(this);
+        window.addEventListener('keydown', this._handleKeyDown);
+
         this.init();
     }
 
@@ -385,6 +390,7 @@ class YedpViewport {
 
             this.setupHeader(headerDiv);
             this.setupTimeline(timelineDiv);
+            this.buildGizmoPanel(viewportDiv);
             this.buildSidebar();
             
             await this.fetchAnimations();
@@ -423,11 +429,11 @@ class YedpViewport {
         div.innerHTML = `
             <div style="display:flex; align-items:center; gap:6px;">
                 <label style="color:#ccc; font-size:11px; cursor:pointer;"><input type="checkbox" id="chk-depth"> Depth</label>
-                <div id="depth-ctrls" style="display:flex; align-items:center; gap:2px; opacity:0.5; transition:opacity 0.2s;">
-                    <span style="color:#666; font-size:10px;">N:</span>
-                    <input id="inp-near" type="number" step="0.1" value="0.1" style="width:36px; background:#333; color:#fff; border:1px solid #444; font-size:10px; padding:1px;">
-                    <span style="color:#666; font-size:10px;">F:</span>
-                    <input id="inp-far" type="number" step="0.5" value="10.0" style="width:36px; background:#333; color:#fff; border:1px solid #444; font-size:10px; padding:1px;">
+                <div id="depth-ctrls" style="display:flex; align-items:center; gap:4px; opacity:0.5; transition:opacity 0.2s;">
+                    <span style="color:#4ade80; font-size:10px; font-weight:bold;">NEAR DEPTH:</span>
+                    <input id="inp-near" type="number" step="0.1" value="0.1" style="width:40px; background:#111; color:#4ade80; border:1px solid #4ade80; font-size:10px; padding:1px 2px; border-radius:2px; font-weight:bold;">
+                    <span style="color:#4ade80; font-size:10px; font-weight:bold; margin-left:4px;">FAR DEPTH:</span>
+                    <input id="inp-far" type="number" step="0.5" value="10.0" style="width:40px; background:#111; color:#4ade80; border:1px solid #4ade80; font-size:10px; padding:1px 2px; border-radius:2px; font-weight:bold;">
                 </div>
                 <label style="color:#666; font-size:11px; cursor:pointer;"><input type="checkbox" id="chk-skel" checked> Skel</label>
             </div>
@@ -487,6 +493,75 @@ class YedpViewport {
         };
     }
 
+    handleKeyDown(e) {
+        if (!this.isHovered || !this.activeCharId || this.isBaking || e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+        const k = e.key.toLowerCase();
+        if (k === 'g') { this.transformControls.setMode("translate"); this.updateGizmoUI("translate"); }
+        if (k === 'r') { this.transformControls.setMode("rotate"); this.updateGizmoUI("rotate"); }
+        if (k === 's') { this.transformControls.setMode("scale"); this.updateGizmoUI("scale"); }
+    }
+
+    buildGizmoPanel(vpDiv) {
+        this.container.addEventListener('mouseenter', () => this.isHovered = true);
+        this.container.addEventListener('mouseleave', () => this.isHovered = false);
+
+        this.gizmoBtns = {};
+        const panel = document.createElement("div");
+        Object.assign(panel.style, {
+            position: "absolute", top: "10px", left: "10px", zIndex: "100",
+            display: "flex", flexDirection: "column", gap: "6px",
+            background: "rgba(20,20,20,0.8)", padding: "6px", borderRadius: "6px", border: "1px solid #333"
+        });
+
+        const createIconBtn = (id, svgPath, tooltip, onClick) => {
+            const b = document.createElement("button");
+            b.title = tooltip;
+            Object.assign(b.style, {
+                width: "32px", height: "32px", background: "#333", color: "#ccc",
+                border: "1px solid #555", borderRadius: "4px", cursor: "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center", padding: "4px",
+                transition: "all 0.1s"
+            });
+            b.innerHTML = `<svg width="100%" height="100%" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${svgPath}</svg>`;
+            b.onmouseover = () => { if(b.dataset.active !== "true") b.style.background = "#555"; };
+            b.onmouseout = () => { if(b.dataset.active !== "true") b.style.background = "#333"; };
+            b.onclick = () => { onClick(); };
+            this.gizmoBtns[id] = b;
+            return b;
+        };
+
+        const pathMove = `<path d="M5 9l-3 3 3 3M9 5l3-3 3 3M9 19l3 3 3-3M19 9l3 3-3 3M2 12h20M12 2v20"/>`;
+        const pathRot = `<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>`;
+        const pathScale = `<path d="M21 3l-6 6"/><path d="M21 3v6"/><path d="M21 3h-6"/><path d="M3 21l6-6"/><path d="M3 21v-6"/><path d="M3 21h6"/><path d="M14 10l-4 4"/>`;
+        const pathDeselect = `<line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line>`;
+
+        panel.append(
+            createIconBtn("translate", pathMove, "Move (G)", () => { this.transformControls.setMode("translate"); this.updateGizmoUI("translate"); }),
+            createIconBtn("rotate", pathRot, "Rotate (R)", () => { this.transformControls.setMode("rotate"); this.updateGizmoUI("rotate"); }),
+            createIconBtn("scale", pathScale, "Scale (S)", () => { this.transformControls.setMode("scale"); this.updateGizmoUI("scale"); }),
+            createIconBtn("deselect", pathDeselect, "Deselect", () => { this.transformControls.detach(); this.activeCharId = null; this.refreshSidebarHighlights(); this.updateGizmoUI("none"); })
+        );
+        vpDiv.appendChild(panel);
+        this.updateGizmoUI("translate");
+    }
+
+    updateGizmoUI(mode) {
+        Object.keys(this.gizmoBtns).forEach(k => {
+            const b = this.gizmoBtns[k];
+            if (k === mode) {
+                b.dataset.active = "true";
+                b.style.background = "#00d2ff";
+                b.style.color = "#000";
+                b.style.borderColor = "#00d2ff";
+            } else {
+                b.dataset.active = "false";
+                b.style.background = "#333";
+                b.style.color = "#ccc";
+                b.style.borderColor = "#555";
+            }
+        });
+    }
+
     buildSidebar() {
         const createBtn = (text, color="#444", hover="#555") => {
             const b = document.createElement("button");
@@ -497,32 +572,36 @@ class YedpViewport {
             return b;
         };
 
-        // --- GIZMO TOOLS ---
-        const gizmoPanel = document.createElement("div");
-        gizmoPanel.style.background = "#222"; gizmoPanel.style.padding = "6px"; gizmoPanel.style.borderRadius = "4px";
-        gizmoPanel.innerHTML = `<div style="margin-bottom:4px;font-weight:bold;color:#aaa;">Gizmo Tools</div>`;
-        
-        const gizmoRow = document.createElement("div");
-        gizmoRow.style.display = "flex"; gizmoRow.style.gap = "4px";
-        
-        const btnMove = createBtn("Move");
-        const btnRot = createBtn("Rotate");
-        const btnScale = createBtn("Scale");
-        const btnDeselect = createBtn("Deselect", "#522", "#733");
-        
-        btnMove.onclick = () => this.transformControls.setMode("translate");
-        btnRot.onclick = () => this.transformControls.setMode("rotate");
-        btnScale.onclick = () => this.transformControls.setMode("scale");
-        btnDeselect.onclick = () => { this.transformControls.detach(); this.activeCharId = null; this.refreshSidebarHighlights(); };
-        
-        gizmoRow.append(btnMove, btnRot, btnScale, btnDeselect);
-        gizmoPanel.appendChild(gizmoRow);
-        this.uiSidebar.appendChild(gizmoPanel);
+        const createCollapsible = (titleText, defaultOpen) => {
+            const wrap = document.createElement("div");
+            Object.assign(wrap.style, { background: "#222", borderRadius: "4px", marginBottom: "8px", border: "1px solid #333" });
+            
+            const head = document.createElement("div");
+            Object.assign(head.style, { background: "#1a1a1a", padding: "8px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: defaultOpen ? "1px solid #333" : "none", borderTopLeftRadius: "4px", borderTopRightRadius: "4px" });
+            
+            const titleSpan = document.createElement("span");
+            Object.assign(titleSpan.style, { fontWeight: "bold", color: "#aaa", fontSize: "11px", display: "flex", alignItems: "center", gap: "4px" });
+            titleSpan.innerHTML = `<span style="color:#666; font-size:9px;">${defaultOpen ? '▼' : '▶'}</span> ${titleText}`;
 
-        // --- CAMERA SEQUENCE ---
-        const camPanel = document.createElement("div");
-        camPanel.style.background = "#222"; camPanel.style.padding = "6px"; camPanel.style.borderRadius = "4px";
-        camPanel.innerHTML = `<div style="margin-bottom:4px;font-weight:bold;color:#aaa;">Camera Sequence</div>`;
+            head.appendChild(titleSpan);
+
+            const content = document.createElement("div");
+            Object.assign(content.style, { padding: "8px", display: defaultOpen ? "flex" : "none", flexDirection: "column", gap: "6px" });
+
+            head.onclick = (e) => {
+                if (e.target.tagName === 'BUTTON') return; 
+                const isOpen = content.style.display !== "none";
+                content.style.display = isOpen ? "none" : "flex";
+                head.style.borderBottom = isOpen ? "none" : "1px solid #333";
+                titleSpan.innerHTML = `<span style="color:#666; font-size:9px;">${isOpen ? '▶' : '▼'}</span> ${titleText}`;
+            };
+
+            wrap.append(head, content);
+            return { wrap, head, content };
+        };
+
+        // --- CAMERA SEQUENCE (Collapsible) ---
+        const camCol = createCollapsible("Camera Sequence", false);
         
         const camRow1 = document.createElement("div"); camRow1.style.display = "flex"; camRow1.style.gap = "4px"; camRow1.style.marginBottom = "4px";
         const btnSetStart = createBtn("Set Start");
@@ -532,7 +611,7 @@ class YedpViewport {
             this.camKeys.start = { 
                 pos: this.camera.position.clone(), 
                 quat: this.camera.quaternion.clone(),
-                target: this.controls.target.clone() // Fixed: Also save the OrbitControls target for panning
+                target: this.controls.target.clone()
             };
             btnSetStart.innerText = "Start Set ✓"; btnSetStart.style.borderColor = "#0f0";
         };
@@ -540,7 +619,7 @@ class YedpViewport {
             this.camKeys.end = { 
                 pos: this.camera.position.clone(), 
                 quat: this.camera.quaternion.clone(),
-                target: this.controls.target.clone() // Fixed: Also save the OrbitControls target for panning
+                target: this.controls.target.clone()
             };
             btnSetEnd.innerText = "End Set ✓"; btnSetEnd.style.borderColor = "#0f0";
         };
@@ -560,25 +639,22 @@ class YedpViewport {
 
         camRow1.append(btnSetStart, btnSetEnd);
         camRow2.append(selEase, btnClearCam);
-        camPanel.append(camRow1, camRow2);
-        this.uiSidebar.appendChild(camPanel);
+        camCol.content.append(camRow1, camRow2);
+        this.uiSidebar.appendChild(camCol.wrap);
 
-        // --- CHARACTERS HEADER ---
-        const charHeader = document.createElement("div");
-        charHeader.style.display = "flex"; charHeader.style.justifyContent = "space-between"; charHeader.style.alignItems = "center";
-        charHeader.innerHTML = `<span style="font-weight:bold;color:#aaa;">Characters</span>`;
+        // --- CHARACTERS (Collapsible) ---
+        const charCol = createCollapsible("Characters", true);
         
         const btnAddChar = createBtn("+ Add Char", "#252", "#373");
-        btnAddChar.style.flex = "none"; btnAddChar.style.padding = "2px 6px";
-        btnAddChar.onclick = () => this.addCharacter();
-        charHeader.appendChild(btnAddChar);
+        btnAddChar.style.flex = "none"; btnAddChar.style.padding = "2px 6px"; btnAddChar.style.fontSize = "9px";
+        btnAddChar.onclick = (e) => { e.stopPropagation(); this.addCharacter(); };
+        charCol.head.appendChild(btnAddChar);
         
-        this.uiSidebar.appendChild(charHeader);
-
-        // --- CHARACTER LIST CONTAINER ---
         this.uiCharList = document.createElement("div");
         this.uiCharList.style.display = "flex"; this.uiCharList.style.flexDirection = "column"; this.uiCharList.style.gap = "6px";
-        this.uiSidebar.appendChild(this.uiCharList);
+        charCol.content.appendChild(this.uiCharList);
+
+        this.uiSidebar.appendChild(charCol.wrap);
     }
 
     refreshSidebarHighlights() {
@@ -602,7 +678,12 @@ class YedpViewport {
             const actBox = document.createElement("div"); actBox.style.display = "flex"; actBox.style.gap = "4px";
             const btnSel = document.createElement("button"); btnSel.innerText = "Select";
             Object.assign(btnSel.style, { background: "#444", color: "#fff", border: "1px solid #555", borderRadius: "2px", cursor: "pointer", fontSize: "9px" });
-            btnSel.onclick = () => { this.activeCharId = c.id; this.transformControls.attach(c.scene); this.refreshSidebarHighlights(); };
+            btnSel.onclick = () => { 
+                this.activeCharId = c.id; 
+                this.transformControls.attach(c.scene); 
+                this.refreshSidebarHighlights(); 
+                if (this.updateGizmoUI) this.updateGizmoUI(this.transformControls.getMode());
+            };
             
             const btnDel = document.createElement("button"); btnDel.innerText = "X";
             Object.assign(btnDel.style, { background: "#622", color: "#fff", border: "1px solid #555", borderRadius: "2px", cursor: "pointer", fontSize: "9px" });
@@ -1199,6 +1280,7 @@ app.registerExtension({
                     if (this.vp) {
                         this.vp.isBaking = false;
                         this.vp.isPlaying = false;
+                        if (this.vp._handleKeyDown) window.removeEventListener('keydown', this.vp._handleKeyDown);
                         if (this.vp.renderer) {
                             this.vp.renderer.dispose();
                             this.vp.renderer = null;
