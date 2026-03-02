@@ -1,7 +1,7 @@
 import { app } from "/scripts/app.js";
 import { api } from "/scripts/api.js";
 
-/** * YEDP ACTION DIRECTOR - V9.10 (Full PNG Export)
+/** * YEDP ACTION DIRECTOR - V9.11 (Full PNG Export)
  * - Added: Support for up to 4 characters in the same scene.
  * - Added: TransformControls for moving and rotating characters individually.
  * - Added: Sidebar UI for independent character animation selection and looping.
@@ -24,6 +24,9 @@ import { api } from "/scripts/api.js";
  * - Fix (9.9): Decoupled internal engine time from integer UI slider to fix playback freezing on non-30 FPS values.
  * - Update (9.10): Upgraded all rendering passes (Depth, Canny, Normal) to 100% lossless pure PNG now that payload size limits are removed.
  * - Fix (Camera): Added OrbitControls target to keyframes to fix panning and zooming translation issues.
+ * - Update (Offline): Pointed all imports to the same local directory.
+ * - Fix (9.11): Ensured "none" is always available in animation lists to fix UI default-selection mismatches.
+ * - Fix (9.11): Forcefully hide the skeleton during all baking passes to prevent contamination of the OpenPose render.
  */
 
 const loadThreeJS = async () => {
@@ -32,15 +35,17 @@ const loadThreeJS = async () => {
     return window._YEDP_THREE_CACHE = new Promise(async (resolve, reject) => {
         const baseUrl = new URL(".", import.meta.url).href;
         try {
-            console.log("[Yedp] Initializing Engine V9.10...");
-            const THREE = await import("https://esm.sh/three@0.160.0");
-            const { OrbitControls } = await import("https://esm.sh/three@0.160.0/examples/jsm/controls/OrbitControls.js?deps=three@0.160.0");
-            const { TransformControls } = await import("https://esm.sh/three@0.160.0/examples/jsm/controls/TransformControls.js?deps=three@0.160.0");
-            const { GLTFLoader } = await import("https://esm.sh/three@0.160.0/examples/jsm/loaders/GLTFLoader.js?deps=three@0.160.0");
-            await import("https://esm.sh/fflate@0.8.0"); 
-            const { FBXLoader } = await import("https://esm.sh/three@0.160.0/examples/jsm/loaders/FBXLoader.js?deps=three@0.160.0");
-            const { BVHLoader } = await import("https://esm.sh/three@0.160.0/examples/jsm/loaders/BVHLoader.js?deps=three@0.160.0");
-            const { clone } = await import("https://esm.sh/three@0.160.0/examples/jsm/utils/SkeletonUtils.js?deps=three@0.160.0");
+            console.log("[Yedp] Initializing Engine V9.11 (Offline Mode)...");
+            
+            // Loaded locally from the same folder
+            const THREE = await import(new URL("./three.module.js", baseUrl).href);
+            const { OrbitControls } = await import(new URL("./OrbitControls.js", baseUrl).href);
+            const { TransformControls } = await import(new URL("./TransformControls.js", baseUrl).href);
+            const { GLTFLoader } = await import(new URL("./GLTFLoader.js", baseUrl).href);
+            await import(new URL("./fflate.module.js", baseUrl).href); 
+            const { FBXLoader } = await import(new URL("./FBXLoader.js", baseUrl).href);
+            const { BVHLoader } = await import(new URL("./BVHLoader.js", baseUrl).href);
+            const { clone } = await import(new URL("./SkeletonUtils.js", baseUrl).href);
 
             resolve({ THREE, OrbitControls, TransformControls, GLTFLoader, FBXLoader, BVHLoader, SkeletonUtils: { clone } });
         } catch (e) {
@@ -664,7 +669,10 @@ class YedpViewport {
         try {
             const res = await api.fetchApi("/yedp/get_animations");
             const data = await res.json();
-            if (data.files && data.files.length > 0) this.availableAnimations = data.files;
+            if (data.files && data.files.length > 0) {
+                // Ensure 'none' is always available to prevent UI default mismatches
+                this.availableAnimations = ["none", ...data.files.filter(f => f !== "none")];
+            }
         } catch(e) { console.error("Failed to fetch animations."); }
     }
 
@@ -757,8 +765,8 @@ class YedpViewport {
 
                 charObj.duration = cleanClip.duration;
                 
-                // Update label
-                const lbl = document.getElementById(`dur-${charObj.id}`);
+                // Update label dynamically using the container scope to ensure accuracy
+                const lbl = this.container.querySelector(`#dur-${charObj.id}`);
                 if (lbl) {
                     const fps = this.getWidgetValue("fps", 24);
                     lbl.innerText = `${Math.floor(charObj.duration * fps)}f`;
@@ -988,7 +996,9 @@ class YedpViewport {
                 c.poseMeshes.forEach(m => m.visible = showPose);
                 c.inactiveDepthMeshes.forEach(m => m.visible = false); // Force inactive meshes to stay hidden
                 c.activeDepthMeshes.forEach(m => m.visible = showDepth);
-                c.skeletonHelper.visible = visSkel && showPose; 
+                
+                // Force hide skeleton helper during all bake passes so it never contaminates the OpenPose result
+                c.skeletonHelper.visible = false; 
             });
         };
 
@@ -1147,7 +1157,7 @@ app.registerExtension({
         if (nodeData.name === "YedpActionDirector") {
             const onNodeCreated = nodeType.prototype.onNodeCreated;
             nodeType.prototype.onNodeCreated = function () {
-                if (onNodeCreated) onNodeCreated.apply(this, arguments);
+                const r = onNodeCreated ? onNodeCreated.apply(this, arguments) : undefined;
 
                 const container = document.createElement("div");
                 container.classList.add("yedp-container");
@@ -1159,6 +1169,7 @@ app.registerExtension({
                 
                 setTimeout(() => {
                     const vp = new YedpViewport(this, container);
+                    this.vp = vp; // Store reference for cleanup
                     const onResizeOrig = this.onResize;
                     this.onResize = function(size) {
                         if (onResizeOrig) onResizeOrig.call(this, size);
@@ -1174,10 +1185,28 @@ app.registerExtension({
                         container.style.maxHeight = "none";
                         vp.onResize(container.querySelector(".yedp-vp-area"));
                     };
+                    
+                    // Hide the raw JSON text widget like in the webcam node
+                    const w = this.widgets?.find(w => w.name === "client_data");
+                    if (w?.inputEl) w.inputEl.style.display = "none";
                 }, 100);
                 
                 // Made the default UI slightly wider to comfortably fit the viewport + sidebar
                 this.setSize([720, 600]);
+                
+                // Cleanup memory and animation loop when node is deleted
+                this.onRemoved = function() {
+                    if (this.vp) {
+                        this.vp.isBaking = false;
+                        this.vp.isPlaying = false;
+                        if (this.vp.renderer) {
+                            this.vp.renderer.dispose();
+                            this.vp.renderer = null;
+                        }
+                    }
+                };
+
+                return r;
             };
         }
     }
