@@ -122,4 +122,4 @@ This project is open-source and available under the **MIT License**.
 
 ## **❤️ Credits**
 
-created by Yedp. Special thanks to [mizumori-bit]([URL](https://github.com/mizumori-bit/) "mizumori-bit GitHub") for his contribution on Orthographic/Views/Lighting implementation
+created by Yedp. Special thanks to mizumori-bit (https://github.com/mizumori-bit/) for his contribution on Orthographic/Views/Lighting implementation
