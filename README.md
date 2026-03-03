@@ -119,3 +119,7 @@ If you want to modify Yedp_Rig.glb in Blender to add your own meshes or props, t
 ## **📜 License**
 
 This project is open-source and available under the **MIT License**.
+
+## **❤️ Credits**
+
+created by Yedp. Special thanks to [mizumori-bit]([URL](https://github.com/mizumori-bit/) "mizumori-bit GitHub") for his contribution on Orthographic/Views/Lighting implementation
