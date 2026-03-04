@@ -15,12 +15,19 @@ import uuid
 if "yedp_anims" not in folder_paths.folder_names_and_paths:
     folder_paths.folder_names_and_paths["yedp_anims"] = ([os.path.join(folder_paths.get_input_directory(), "yedp_anims")], {".glb", ".fbx", ".bvh"})
 
+if "yedp_envs" not in folder_paths.folder_names_and_paths:
+    folder_paths.folder_names_and_paths["yedp_envs"] = ([os.path.join(folder_paths.get_input_directory(), "yedp_envs")], {".glb", ".gltf", ".fbx", ".obj"})
+
+# Added: Register yedp_cams folder
+if "yedp_cams" not in folder_paths.folder_names_and_paths:
+    folder_paths.folder_names_and_paths["yedp_cams"] = ([os.path.join(folder_paths.get_input_directory(), "yedp_cams")], {".glb", ".fbx"})
+
 # Global Cache for massive payloads
 YEDP_PAYLOAD_CACHE = {}
 
 class YedpActionDirector:
     """
-    ComfyUI-Yedp-Action-Director (V9.15 Edition)
+    ComfyUI-Yedp-Action-Director (V9.20 Edition - Environments & Alpha Mask)
     """
     
     def __init__(self):
@@ -42,12 +49,12 @@ class YedpActionDirector:
             }
         }
 
-    RETURN_TYPES = ("IMAGE", "IMAGE", "IMAGE", "IMAGE", "IMAGE")
-    RETURN_NAMES = ("POSE_BATCH", "DEPTH_BATCH", "CANNY_BATCH", "NORMAL_BATCH", "SHADED_BATCH")
+    RETURN_TYPES = ("IMAGE", "IMAGE", "IMAGE", "IMAGE", "IMAGE", "IMAGE")
+    RETURN_NAMES = ("POSE_BATCH", "DEPTH_BATCH", "CANNY_BATCH", "NORMAL_BATCH", "SHADED_BATCH", "ALPHA_BATCH")
     FUNCTION = "render"
     CATEGORY = "Yedp/MoCap"
     
-    DESCRIPTION = "Controls multiple 3D characters, animations, and camera keyframes in a web-based viewport."
+    DESCRIPTION = "Controls multiple 3D characters, environment props (GLTF/FBX), and camera keyframes."
 
     @classmethod
     def IS_CHANGED(cls, width, height, frame_count, fps, client_data=None, unique_id=None):
@@ -86,7 +93,7 @@ class YedpActionDirector:
             print("[Yedp] ERROR: No image data received from frontend.")
             red_frame = torch.zeros((1, height, width, 3))
             red_frame[:,:,:,0] = 1.0 
-            return (red_frame, red_frame, red_frame, red_frame, red_frame)
+            return (red_frame, red_frame, red_frame, red_frame, red_frame, red_frame)
 
         # 2. Check if it's a Memory Cache ID instead of raw JSON
         global YEDP_PAYLOAD_CACHE
@@ -97,7 +104,7 @@ class YedpActionDirector:
                 print(f"[Yedp] ERROR: Payload ID {client_data} not found in memory cache! Please click BAKE in the node again.")
                 red_frame = torch.zeros((1, height, width, 3))
                 red_frame[:,:,:,0] = 1.0 
-                return (red_frame, red_frame, red_frame, red_frame, red_frame)
+                return (red_frame, red_frame, red_frame, red_frame, red_frame, red_frame)
 
         # 3. Parse JSON
         try:
@@ -106,20 +113,36 @@ class YedpActionDirector:
             print(f"[Yedp] JSON Decode Error.")
             raise ValueError("Failed to parse JSON from client.")
 
-        # 4. Decode Batches (Now with Shaded pass)
+        # 4. Decode Batches
         pose_batch = self.decode_batch(data.get("pose", []), width, height, "pose")
         depth_batch = self.decode_batch(data.get("depth", []), width, height, "depth")
         canny_batch = self.decode_batch(data.get("canny", []), width, height, "canny")
         normal_batch = self.decode_batch(data.get("normal", []), width, height, "normal")
         shaded_batch = self.decode_batch(data.get("shaded", []), width, height, "shaded")
+        alpha_batch = self.decode_batch(data.get("alpha", []), width, height, "alpha")
         
-        print(f"[Yedp] Successfully rendered {len(pose_batch)} frames (5 batches).")
-        return (pose_batch, depth_batch, canny_batch, normal_batch, shaded_batch)
+        print(f"[Yedp] Successfully rendered {len(pose_batch)} frames (6 batches).")
+        return (pose_batch, depth_batch, canny_batch, normal_batch, shaded_batch, alpha_batch)
 
 # --- API ROUTES ---
 @PromptServer.instance.routes.get("/yedp/get_animations")
 async def get_animations(request):
     files = folder_paths.get_filename_list("yedp_anims")
+    if not files:
+        files = []
+    return web.json_response({"files": files})
+
+@PromptServer.instance.routes.get("/yedp/get_envs")
+async def get_envs(request):
+    files = folder_paths.get_filename_list("yedp_envs")
+    if not files:
+        files = []
+    return web.json_response({"files": files})
+
+# Added: API Route for fetching cameras from the new folder
+@PromptServer.instance.routes.get("/yedp/get_cams")
+async def get_cams(request):
+    files = folder_paths.get_filename_list("yedp_cams")
     if not files:
         files = []
     return web.json_response({"files": files})
