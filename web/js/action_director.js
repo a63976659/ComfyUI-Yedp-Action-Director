@@ -2147,49 +2147,67 @@ app.registerExtension({
             const onNodeCreated = nodeType.prototype.onNodeCreated;
             nodeType.prototype.onNodeCreated = function () {
                 const r = onNodeCreated ? onNodeCreated.apply(this, arguments) : undefined;
+                const node = this;
+                
+                // 【核心修复 1】：在创建 DOM 之前，立刻揪出冗余数据框并“物理超度”，防止它幽灵占位
+                const wData = node.widgets?.find(w => w.name === "客户端数据");
+                if (wData) {
+                    wData.type = "hidden";
+                    wData.computeSize = () => [0, 0]; 
+                    if (wData.inputEl) wData.inputEl.style.display = "none";
+                }
+
                 const container = document.createElement("div");
                 container.classList.add("yedp-container");
-                // 宽度保持 100% 动态填充，内部基础高度增加 100，改为 600px
                 container.style.width = "100%"; 
                 container.style.height = "600px"; 
+                container.style.boxSizing = "border-box";
+                container.style.marginTop = "10px"; // 距离上方组件 10px
                 
-                const widget = this.addDOMWidget("3d_viewport", "vp", container, { serialize: false, hideOnZoom: false });
+                const widget = node.addDOMWidget("3d_viewport", "vp", container, { serialize: false, hideOnZoom: false });
                 
-                // 【核心修复：打破死循环，且还原动态宽度 w】
-                // 向引擎上报原始宽度 w，并将画布最小高度锁定为 600
-                widget.computeSize = function(w) {
-                    return [w, 600]; 
+                // 【核心修复 2】：不仅上报 600 高度，还要把顶部 10px 和底部 20px 的安全区也上报给引擎 (600+10+20=630)
+                widget.computeSize = function(width) {
+                    return [Math.max(width, 820), 630]; 
                 };
                 
                 setTimeout(() => {
-                    const vp = new YedpViewport(this, container);
-                    this.vp = vp; 
-                    const onResizeOrig = this.onResize;
-                    this.onResize = function(size) {
+                    const vp = new YedpViewport(node, container);
+                    node.vp = vp; 
+                    
+                    const onResizeOrig = node.onResize;
+                    node.onResize = function(size) {
                         if (onResizeOrig) onResizeOrig.call(this, size);
-                        let usedHeight = 30; 
-                        if (this.widgets) for (const w of this.widgets) { if (w === widget) break; usedHeight += w.last_h || 26; }
-                        const safeHeight = Math.max(100, size[1] - usedHeight - 35);
-                        container.style.height = safeHeight + "px"; 
-                        container.style.maxHeight = "none";
-                        vp.onResize(container.querySelector(".yedp-vp-area"));
+                        
+                        let startY = widget.last_y;
+                        if (!startY) {
+                            startY = 30; 
+                            if (node.widgets) {
+                                for (const w of node.widgets) {
+                                    if (w === widget) break;
+                                    if (w.type === "hidden") continue; // 【关键排雷】：彻底跳过被隐藏的组件
+                                    startY += (w.last_h || 22) + 4; 
+                                }
+                            }
+                        }
+                        
+                        // 可用高度 = 节点总高 - 前方已用高度 - 30px安全区(顶10+底20)
+                        const availableHeight = size[1] - startY - 30; 
+                        
+                        container.style.height = availableHeight + "px"; 
+                        container.style.maxHeight = availableHeight + "px";
+                        
+                        if (vp && vp.isInitialized) {
+                            vp.onResize(container.querySelector(".yedp-vp-area"));
+                        }
                     };
                     
-                    const w = this.widgets?.find(w => w.name === "客户端数据");
-                    if (w?.inputEl) {
-                        w.inputEl.style.display = "none";
-                        w.computeSize = () => [0, -4]; // 抹平隐藏输入框留下的白边
-                    }
-                    
-                    // 只在节点刚创建（高度不足）时，赋予初始尺寸
-                    // 宽度保持原本的 720，高度增加 100 变为 700
-                    if (this.size[1] < 650) {
-                        this.setSize([720, 700]);
-                        if (app.graph) app.graph.setDirtyCanvas(true, true);
-                    }
+                    // 初始新建节点时：宽 820，高 800
+                    node.setSize([820, 800]); 
+                    if (app.graph) app.graph.setDirtyCanvas(true, true);
                 }, 100);
                 
-                this.onRemoved = function() {
+                node.onRemoved = function() {
                     if (this.vp) {
                         this.vp.isBaking = false; this.vp.isPlaying = false;
                         if (this.vp._handleKeyDown) window.removeEventListener('keydown', this.vp._handleKeyDown);
