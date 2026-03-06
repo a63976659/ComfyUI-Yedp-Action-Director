@@ -1,140 +1,140 @@
-/* --- YEDP TECHNICAL THEME --- */
+/* --- YEDP 技术感主题 (YEDP TECHNICAL THEME) --- */
 :root {
-    --yedp-bg: #1e1e1e;
-    --yedp-cyan: #00d2ff;
-    --yedp-dark: #121212;
-    --yedp-text: #e0e0e0;
+    --yedp-bg: #1e1e1e;
+    --yedp-cyan: #00d2ff;
+    --yedp-dark: #121212;
+    --yedp-text: #e0e0e0;
 }
 
 .yedp-container {
-    position: relative;
-    width: 100%;
-    height: 100%;
-    background: var(--yedp-dark);
-    overflow: hidden;
-    font-family: 'Consolas', 'Monaco', monospace;
-    border: 1px solid var(--yedp-cyan);
+    position: relative;
+    width: 100%;
+    height: 100%;
+    background: var(--yedp-dark);
+    overflow: hidden;
+    font-family: 'Consolas', 'Monaco', monospace;
+    border: 1px solid var(--yedp-cyan);
 }
 
-/* 3D Canvas */
+/* 3D 画布 (3D Canvas) */
 .yedp-canvas {
-    display: block;
-    width: 100%;
-    height: 100%;
-    outline: none;
+    display: block;
+    width: 100%;
+    height: 100%;
+    outline: none;
 }
 
-/* Resolution Gate (Letterboxing) */
+/* 分辨率安全框/遮幅黑边 (Resolution Gate / Letterboxing) */
 .yedp-gate {
-    position: absolute;
-    top: 0; left: 0; right: 0; bottom: 0;
-    pointer-events: none; /* Let clicks pass through */
-    box-shadow: inset 0 0 0 2px var(--yedp-cyan); /* Active border */
-    z-index: 10;
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    pointer-events: none; /* 允许鼠标点击事件穿透 */
+    box-shadow: inset 0 0 0 2px var(--yedp-cyan); /* 激活状态边框 */
+    z-index: 10;
 }
 
-/* Floating UI Overlay - Top Control Bar */
+/* 悬浮 UI 遮罩层 - 顶部控制栏 (Floating UI Overlay - Top Control Bar) */
 .yedp-ui-top {
-    position: absolute;
-    top: 10px;
-    left: 10px;
-    right: 10px;
-    display: flex;
-    justify-content: space-between;
-    z-index: 20;
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    right: 10px;
+    display: flex;
+    justify-content: space-between;
+    z-index: 20;
 }
 
 .yedp-btn {
-    background: rgba(0, 0, 0, 0.7);
-    border: 1px solid var(--yedp-cyan);
-    color: var(--yedp-cyan);
-    padding: 5px 10px;
-    cursor: pointer;
-    font-size: 12px;
-    text-transform: uppercase;
-    transition: all 0.2s;
+    background: rgba(0, 0, 0, 0.7);
+    border: 1px solid var(--yedp-cyan);
+    color: var(--yedp-cyan);
+    padding: 5px 10px;
+    cursor: pointer;
+    font-size: 12px;
+    text-transform: uppercase;
+    transition: all 0.2s;
 }
 
 .yedp-btn:hover {
-    background: var(--yedp-cyan);
-    color: #000;
+    background: var(--yedp-cyan);
+    color: #000;
 }
 
 .yedp-btn.active {
-    background: var(--yedp-cyan);
-    color: #000;
-    box-shadow: 0 0 10px var(--yedp-cyan);
+    background: var(--yedp-cyan);
+    color: #000;
+    box-shadow: 0 0 10px var(--yedp-cyan);
 }
 
-/* Floating UI Overlay - Bottom Animation List */
+/* 悬浮 UI 遮罩层 - 底部动画列表 (Floating UI Overlay - Bottom Animation List) */
 .yedp-ui-bottom {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    height: 120px;
-    background: rgba(30, 30, 30, 0.9);
-    border-top: 1px solid var(--yedp-cyan);
-    z-index: 20;
-    display: flex;
-    flex-direction: column;
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 120px;
+    background: rgba(30, 30, 30, 0.9);
+    border-top: 1px solid var(--yedp-cyan);
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
 }
 
 .yedp-anim-header {
-    padding: 5px 10px;
-    font-size: 11px;
-    background: var(--yedp-cyan);
-    color: #000;
-    font-weight: bold;
+    padding: 5px 10px;
+    font-size: 11px;
+    background: var(--yedp-cyan);
+    color: #000;
+    font-weight: bold;
 }
 
 .yedp-anim-list {
-    flex: 1;
-    overflow-y: auto;
-    padding: 5px;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 5px;
+    flex: 1;
+    overflow-y: auto;
+    padding: 5px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
 }
 
 .yedp-anim-item {
-    padding: 5px 8px;
-    background: #333;
-    border: 1px solid #555;
-    color: #aaa;
-    font-size: 11px;
-    cursor: pointer;
-    width: 100%;
-    text-align: left;
+    padding: 5px 8px;
+    background: #333;
+    border: 1px solid #555;
+    color: #aaa;
+    font-size: 11px;
+    cursor: pointer;
+    width: 100%;
+    text-align: left;
 }
 
 .yedp-anim-item:hover {
-    border-color: var(--yedp-cyan);
-    color: #fff;
+    border-color: var(--yedp-cyan);
+    color: #fff;
 }
 
 .yedp-anim-item.selected {
-    background: var(--yedp-cyan);
-    color: #000;
-    border-color: #fff;
+    background: var(--yedp-cyan);
+    color: #000;
+    border-color: #fff;
 }
 
-/* Render Progress Bar */
+/* 渲染进度条 (Render Progress Bar) */
 .yedp-progress {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 200px;
-    height: 20px;
-    background: #000;
-    border: 1px solid var(--yedp-cyan);
-    z-index: 30;
-    display: none; /* Hidden by default */
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 200px;
+    height: 20px;
+    background: #000;
+    border: 1px solid var(--yedp-cyan);
+    z-index: 30;
+    display: none; /* 默认隐藏 */
 }
 
 .yedp-progress-bar {
-    height: 100%;
-    background: var(--yedp-cyan);
-    width: 0%;
+    height: 100%;
+    background: var(--yedp-cyan);
+    width: 0%;
 }
