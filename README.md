@@ -1,128 +1,92 @@
 # **🎬 ComfyUI Yedp Action Director**
-
-https://github.com/user-attachments/assets/24be7683-c92c-4ba8-a64e-1106b8325f53
-
-**A powerful 3D viewport node for ComfyUI to direct, preview, and batch-render 3D character animations, environments, and custom cameras for ControlNet workflows.**
+**Yedp 动作导演**汉化版
+<img width="1435" height="1168" alt="节点汉化" src="https://github.com/user-attachments/assets/13894fab-e427-40e3-8459-ff2f08a4a1d1" />
 
 
-## **🌟 Overview**
+**一款强大的 3D 视图节点，适用于 ComfyUI，可用于控制、预览和批量渲染 3D 角色动画、环境以及自定义摄像机，适用于 ControlNet 工作流程。**
 
-**Yedp Action Director** is a custom node for ComfyUI that integrates a fully interactive 3D viewport directly into your workflow. It allows you to dynamically load up to 16 characters, assign independent MoCap animations, import full 3D environments and baked physics, compose them in 3D space, animate or override camera movements, and bake pixel-perfect **OpenPose, Depth, Canny, Normal, Shaded, and Alpha** passes directly into your ControlNet pipelines.
 
-## **✨ Key Features**
+## **🌟 概述**
 
-* **Interactive 3D Viewport:** Fully resizable, click-to-select raycasting, orbit controls, and real-time playback scrubbing.  
-* **Multi-Pass Rendering:** Generates 6 distinct batches in one go:  
-  * **🔴 Pose:** Unlit flat colors for OpenPose.  
-  * **⚫ Depth:** High-quality depth maps with **Manual Near/Far** controls.  
-  * **⚪ Canny:** Procedural Rim-Light (Matcap) for perfect edge detection.  
-  * **🔵 Normal:** Standard RGB normal maps for geometry detail.  
-  * **🟠 Shaded:** Clay-style renders for spatial and lighting reference.  
-  * **🏁 Alpha:** Pure black and white character/prop matte masks for compositing.  
-* **Format Support:** Supports standard .fbx and .glb animation and environment files.  
-* **Smart Retargeting:** Auto-detects and normalizes bone names (Mixamo & HY-MOTION compatible).  
-* **Workflow Serialization:** Your entire 3D scene setup (positions, loops, cameras) is saved directly inside your ComfyUI workflow.
+**Yedp 动作导演**是一款专为 ComfyUI 设计的自定义节点，它将一个完全交互式的 3D 视图直接集成到您的工作流程中。它使您能够动态加载多达 16 个角色，为每个角色分配独立的 MoCap 动画，导入完整的 3D 环境和烘焙的物理效果，将它们在 3D 空间中进行组合，对摄像机移动进行动画处理或进行覆盖，并将像素级的**OpenPose、深度、Canny、法线、着色和 Alpha**传递直接烘焙到您的 ControlNet 管道中。
 
-## **🚀 What's New in V9.20 (The Environment & Pipeline Update)**
+## ✨ 主要特点
+* **交互式 3D 视图区：** 支持任意大小调整，点击即可选择的光线投射功能，环绕控制，以及实时播放的快进/快退功能。
+* **多遍渲染：** 一次性生成 6 个不同的批次：
+* **🔴 姿态：** 用于 OpenPose 的无光照平面颜色。
+* **⚫ 深度：** 具有手动近/远控制的高质量深度图。
+* **⚪ 埃辛：** 用于完美边缘检测的程序性边缘光（材质贴图）。
+* **🔵 正面：** 用于几何细节的标准 RGB 正面图。
+* **🟠 照明：** 用于空间和照明参考的泥塑风格渲染。
+* **🏁 阈值：** 用于合成的纯黑白角色/道具哑光遮罩。
+* **格式支持：** 支持标准的.fbx 和.glb 动画和环境文件。
+* **智能重定向：** 自动检测并标准化骨骼名称（与 Mixamo 和 HY-MOTION 兼容）。
+* **工作流程序列化：** 您的整个 3D 场景设置（位置、循环、摄像机）会直接保存在您的 ComfyUI 工作流程中。
+## 🚀 V9.20 版本更新（环境与流程更新）
+此次重大更新将“动作导演”工具从单纯的角色摆位工具转变为完整的 3D 场景合成器，从而在 ComfyUI 与诸如 Maya 和 Blender 等专业三维创作软件之间实现了衔接。
+### 🌍 环境与烘焙式物理效果
+* **环境导入：** 从新的“yedp_envs”文件夹中加载完整的.fbx 和.glb 场景网格（建筑物、街道、静态道具）。环境能够正确地投射和接收阴影。
+* **动画环境：** 标准对象动画（例如移动的汽车、滑动的门或旋转的风扇，在Maya/Blender中以关键帧形式设定）完全得到支持。只需勾选“循环（动画）”复选框即可！
+* **Alembic 样式的物理（混合形状）：** 该引擎可以直接读取 GLTF 的变形目标和形状键动画！在Maya/Blender 中运行布料、软体或风模拟，将其烘焙为形状键，并直接导入到环境选项卡中以实现实时物理效果！
+* **FBX 透明度自动修复：** 自动修复常见的Maya/Blender导出错误，即FBX材质在导入时完全不可见的问题。
+### **🎥 高级摄像系统**
+* **动画摄像机导入功能：** 现在您可以直接从您的 3D 软件中导入.fbx 和.glb 动画摄像机轨道！
+* **摄像机覆盖系统：** 选中“覆盖”选项后，可以锁定视图并实时完美追踪导入的摄像机路径。
+* **Maya / 3D 坐标修正器：** 内置的“FBX 导入修正”面板允许您直接在摄像机上调整局部旋转轴心（Rx、Ry、Rz）和距离缩放。轻松解决常见的“Z 向至 Y 向”坐标轴交换以及厘米到米的缩放问题。
+* **幽灵摄像机可视化器：** 在场景中会出现一条青色的线框代理摄像机，以便您在启用覆盖功能之前直观地对 Maya 摄像机进行对齐和缩放。
+* **专用摄像机文件夹：** 摄像机动画被清晰地隔离在自己的输入/yedp_cams 文件夹中。
 
-This major update transforms Action Director from a character-posing tool into a full 3D scene compositor, bridging the gap between ComfyUI and professional DCCs like Maya and Blender.
+✨ 大规模的用户体验与用户界面改造
+* **动态文件夹刷新功能：** 将新的.fbx 或.glb 文件拖入输入文件夹后，点击实时刷新按钮即可立即加载这些文件，无需重新加载网页！
+* **“点击选择”光线投射功能：** 直接在 3D 视图区域或其用户界面卡片上的任何角色、环境或光源上点击，即可立即附加变换测距仪。
+* **“紧急”重置按钮：** 如果您在 3D 空间中迷失方向或被困在不良导入的摄像机内，请点击“重置”按钮，即可立即将您的视图传回安全的默认起始点。
+* **实时滚动引擎：** 现在，滚动时间轴时会逐帧完美更新所有骨骼、物理和摄像机矩阵，即使在暂停状态下也是如此。
+## **📥 安装**
+1. 将该仓库克隆到您的 ComfyUI 自定义节点目录中：
+进入目录：cd ComfyUI/custom_nodes/
+执行命令：git clone https://github.com/YourUsername/ComfyUI-Yedp-Action-Director.git2. **安装依赖项：** 除了标准的 ComfyUI 要求之外，无需安装任何外部的 Python 依赖项。前端库（Three.js）是动态加载的。3. **添加动画与资源：** 在您的 ComfyUI 输入目录内创建以下文件夹，并将您的.fbx 或.glb 文件按相应位置放置：
+* **角色：** ComfyUI/input/yedp_anims/
+* **环境/物理：** ComfyUI/input/yedp_envs/
+* **摄像机：** ComfyUI/input/yedp_cams/4. **重新启动舒适界面。**
+## 🛠️ 使用方法
+### 1. 开始步骤
+* **添加节点：** 右键点击 > Yedp > MoCap > Yedp 动作导演。
+* **调整设置：** 设置输出的宽度和高度、总帧数以及帧率。
+* **视图切换：** 使用顶部的复选框在阴影、深度或骨骼（骨架）模式下预览您的场景。调整深度的近/远输入以增强对比度。
+### 2. 场景构建（角色与环境）
+* 点击“+ 添加角色”或“+ 添加环境”可将元素添加到场景中。
+* **选择方式：** 直接在 3D 视图中点击对象，或者在侧边栏中点击其卡片。
+* **变换：** 使用浮动的 Gizmo 图标（或快捷键 G、R、S）来移动、旋转和缩放您的对象。点击 X 图标或点击空白区域以取消选择。
+* **动画：** 从下拉菜单中选择一个动画。切换“循环”复选框以实现连续播放。
+### 3. 性别切换功能（男性/女性）
+在“角色循环”复选框旁边有一个切换按钮，上面显示的是“M”（男性）或“F”（女性）。点击此按钮会立即更改角色底层的深度网格，使您能够使用完全相同的骨骼动画来呈现包含不同性别角色的场景！
+### 4. 摄像机方向
+您有两种方式来控制相机的移动：
+* **内部关键帧设置：** 将视口摄像机移动至起始位置，然后点击“设置起始点”。再移动至结束位置并点击“设置结束点”。选择您的插值方式（例如，渐出效果）。摄像机将在这两个点之间实现平滑动画！
+* **Maya/Blender 替代设置：** 从 yedp_cams 文件夹中导入 FBX 摄像机。如果您的 3D 软件使用不同的坐标轴，请调整缩放/旋转修正值，用青色的幽灵代理进行验证，然后点击“替代设置”以将视口锁定到导入的轨道上。
 
-### **🌍 Environments & Baked Physics**
-
-* **Environment Imports:** Load full .fbx and .glb scene meshes (buildings, streets, static props) from the new input/yedp\_envs folder. Environments properly cast and receive shadows.  
-* **Animated Environments:** Standard object animations (like a moving car, sliding doors, or rotating fans keyframed in Maya/Blender) are fully supported. Simply check the "Loop (Anim)" box\!  
-* **Alembic-Style Physics (Blend Shapes):** The engine natively reads GLTF Morph Targets and Shape Key animations\! Run cloth, soft-body, or wind simulations in Maya/Blender, bake them to Shape Keys, and import them directly into the environment tab for real-time physics\!  
-* **FBX Opacity Auto-Fix:** Automatically patches a common Maya/Blender export bug where FBX materials import completely invisible.
-
-### **🎥 Advanced Camera Pipeline**
-
-* **Animated Camera Imports:** You can now import .fbx and .glb animated camera tracks directly from your 3D software\!  
-* **Camera Override System:** Check "Override" to lock the viewport and perfectly trace your imported camera path in real-time.  
-* **Maya / 3D Coordinate Fixer:** Built-in "FBX Import Fix" panel allows you to adjust local Rotation Pivot (Rx, Ry, Rz) and Distance Scale directly on the camera. Easily fixes the classic "Z-Up to Y-Up" axis swap and Centimeter-to-Meter scale issues.  
-* **Ghost Camera Visualizer:** A cyan wireframe proxy camera appears in the scene so you can visually align and scale your Maya camera before engaging the override.  
-* **Dedicated Camera Folder:** Camera animations are cleanly isolated in their own input/yedp\_cams folder.
-
-### **✨ Massive UX & UI Overhaul**
-
-* **Dynamic Folder Refresh:** Click the live refresh button after dropping new .fbx or .glb files into your input folders to load them instantly, without reloading the web page\!  
-* **"Click-to-Select" Raycasting:** Click on any Character, Environment, or Light directly in the 3D viewport or anywhere on its UI card to instantly attach the Transform Gizmo.  
-* **"Panic" Reset Button:** If you ever get lost in 3D space or stuck inside a bad imported camera, click RESET to instantly teleport your view back to the safe default origin.  
-* **Live Scrubbing Engine:** Scrubbing the timeline now updates all bones, physics, and camera matrices flawlessly frame-by-frame, even while paused.
-
-## **📥 Installation**
-
-1. **Clone the repository** into your ComfyUI custom nodes directory:  
-   cd ComfyUI/custom\_nodes/  
-   git clone https://github.com/YourUsername/ComfyUI-Yedp-Action-Director.git  
-2. **Install Dependencies:** No external Python dependencies are required beyond standard ComfyUI requirements. The frontend libraries (Three.js) are loaded dynamically.  
-3. **Add Animations & Assets:** Create the following folders inside your ComfyUI input directory and place your .fbx or .glb files accordingly:  
-   * **Characters:** ComfyUI/input/yedp\_anims/  
-   * **Environments/Physics:** ComfyUI/input/yedp\_envs/  
-   * **Cameras:** ComfyUI/input/yedp\_cams/  
-4. **Restart ComfyUI.**
-
-## **🛠️ Usage**
-
-### **1\. Getting Started**
-
-* **Add the Node:** Right-click \> Yedp \> MoCap \> Yedp Action Director.  
-* **Adjust Settings:** Set your Output width & height, total frame\_count, and fps.  
-* **Viewport Toggles:** Use the top checkboxes to preview your scene in Shaded, Depth, or Skel (Skeleton) modes. Adjust the Depth Near/Far inputs to maximize contrast.
-
-### **2\. Scene Assembly (Characters & Environments)**
-
-* Click **\+ Add Char** or **\+ Add Env** to spawn elements into the scene.  
-* **Selection:** Click directly on the object in the 3D viewport, or click its card in the sidebar.  
-* **Transform:** Use the floating Gizmo icons (or hotkeys G, R, S) to Move, Rotate, and Scale your objects. Click the X icon or click empty space to deselect.  
-* **Animation:** Assign an animation from the dropdown. Toggle the **Loop** checkbox for continuous playback.
-
-### **3\. The M/F (Gender) Toggle**
-
-Next to the Character Loop checkbox is a toggle button indicating **M** (Male) or **F** (Female). Clicking this instantly swaps the underlying depth mesh of the character, allowing you to direct scenes with mixed genders using the exact same skeletal animation\!
-
-### **4\. Camera Direction**
-
-You have two ways to animate your camera:
-
-* **Internal Keyframing:** Move your viewport camera to a start position and click **Set Start**. Move to an end position and click **Set End**. Choose your interpolation (e.g., easeOut). The camera will smoothly animate between the two points\!  
-* **Maya/Blender Override:** Import an FBX camera from the yedp\_cams folder. Adjust the scale/rotation fixes if your 3D software uses different axes, verify it with the cyan ghost proxy, and then check **Override** to lock your viewport to the imported track.
-
-### **5\. Baking**
-
-Click the **BAKE V9.20** button in the viewport header (or BAKE FRAME for a single test frame). The engine will rapidly generate 6 separate visual passes, temporarily cache them to avoid browser crashes, and output them as image batches directly into your ComfyUI workflow.
-
-## **🛠️ Custom Rigging & Prop Setup (For Advanced Users)**
-
-If you want to modify Yedp_Rig.glb in Blender to add your own meshes or props, the parser relies on a specific (but forgiving) naming convention in your node hierarchy:
-
-1. **OpenPose Skeleton:** Any mesh containing pose or openpose in its hierarchy.  
-2. **Female Depth Mesh:** Any mesh containing depth\_f, depthf, female, or woman in its hierarchy.  
-3. **Male Depth Mesh:** Any mesh containing depth, male, or man in its hierarchy.  
-4. **Props (Swords, Hats, etc.):** Any mesh attached to the rig that *does not* match the above words will automatically be treated as a prop\! The engine will smartly render it for **both** Male and Female depth/normal passes.
-
-## **🖼️ Outputs Explained**
-
-| Output | Description | Best Used For |
+### 5. 烘焙
+在视图区域的标题栏中点击“BAKE V9.20”按钮（或者对于单个测试帧则点击“BAKE FRAME”）。引擎将迅速生成 6 个独立的视觉渲染批次，将其暂时缓存起来以避免浏览器崩溃，并直接将它们以图像批次的形式输出到您的 ComfyUI 工作流程中。
+## 🛠️ 个性化布线与道具设置（面向高级用户）
+如果您想在 Blender 中修改 Yedp_Rig.glb 文件以添加自己的网格或道具，那么解析器会依赖于您节点层级结构中的一种特定（但较为宽松）的命名规则：
+1. **开放姿态骨骼图：** 任何包含姿态或“开放姿态”元素的层级结构中的网格。2. **女性深度网格：** 任何层级中包含“深度_f”、“depthf”、“女性”或“女人”字样的网格。3. **男性深度网格：** 任何层级中包含“深度”、“男性”或“男人”等词汇的网格。4. **道具（剑、帽子等）：** 任何未与上述描述相匹配的固定装置（如网状物）都会自动被视为道具！引擎会智能地为男性和女性的深度/正常渲染图分别进行渲染处理。
+##  🖼️ 输出解析
+| 输出 | 描述 | 最适合用于 |
 | :---- | :---- | :---- |
-| **POSE\_BATCH** | Flat, unlit colors representing body parts. | **ControlNet OpenPose** (or custom color-based control). |
-| **DEPTH\_BATCH** | Grayscale distance map (White=Near, Black=Far). | **ControlNet Depth**. Excellent for preserving volumetric shape. |
-| **CANNY\_BATCH** | Black mesh with white illuminated edges (Rim Light). | **ControlNet Canny/Lineart**. Captures silhouette and internal details. |
-| **NORMAL\_BATCH** | RGB Normal map relative to the camera. | **ControlNet NormalMap**. Great for surface detail and lighting. |
-| **SHADED\_BATCH** | Standard 3D clay render with active lighting. | General scene preview or image-to-image styling references. |
-| **ALPHA\_BATCH** | Pure white characters/props on black background. | **Masking/Compositing**. Easily separate subjects from environments. |
+| **POSE_BATCH** | 表示身体部位的平铺、未上色的色彩。 | **ControlNet OpenPose**（或基于颜色的自定义控制）。|
+| **深度批次** | 灰度距离图（白色表示近，黑色表示远）。 | **控制网络深度**。非常适合保留体积形状。|
+| **卡尼_批次** | 黑色网状结构，边缘带有白色发光条（边缘照明）。 | **控制网络 卡尼/线稿**。能够捕捉轮廓和内部细节。|
+| **常规批次** | 与摄像机相对的 RGB 演绎图。 | **控制网络演绎图**。非常适合展现表面细节和光影效果。|
+| **阴影批次** | 带有动态灯光效果的标准 3D 粘土渲染。 | 用于一般场景预览或图像到图像风格化的参考依据。|
+| **阿尔法批次** | 黑色背景上纯白色的角色/道具。 | **遮罩/合成**。能够轻松将主体与环境区分开来。|
 
 
-## **🐛 Troubleshooting**
-
-* **"Animation not playing":** \* The node has been built to play animations from Mixamo. The rig needs to follow a similar prefix structure and a few known synonyms such as "Pelvis" for "Hips". Support for HY-MOTION rig naming conventions is also included.  
-* **"Viewport is invisible on load":** \* *Solution:* Depending on your browser zoom, the viewport might initialize at size 0\. Simply **resize the node slightly** by dragging the bottom-right corner, and the viewport will snap into place.  
-* **"Animation/Environment not found":** \* Ensure your files are in the correct input/ subfolders. Click your custom **Refresh** button in the ComfyUI menu if you just added them\!  
-* **"Slow downs":** \* The node has been optimized for the Chrome browser; potential issues or memory caps might occur on other browsers.
-
-## **📜 License**
-
-This project is open-source and available under the **MIT License**.
-
-## **❤️ Credits**
-
-created by Yedp. Special thanks to mizumori-bit (https://github.com/mizumori-bit/) for his contribution on Orthographic/Views/Lighting implementation
+##  🐛 故障排查
+* **“动画未播放”**：* 该节点已设置为从 Mixamo 播放动画。该绑定需要遵循类似的前缀结构，并且有一些常见的同义词，比如“Pelvis”代表“Hips”。还包括对 HY-MOTION 绑定命名规范的支持。
+* **“加载时视图不可见”**：* 解决方案* ：根据您浏览器的缩放比例，视图可能会以 0 的大小初始化。只需稍微调整节点的大小（通过拖动右下角）即可，然后视图就会自动恢复到正确位置。
+* **“动画/环境未找到”**：* 确保您的文件位于正确的输入/子文件夹中。如果您刚刚添加了这些文件，请在 ComfyUI 菜单中点击您的自定义“刷新”按钮！
+* **“运行缓慢”**：* 该节点已针对 Chrome 浏览器进行了优化；在其他浏览器上可能会出现潜在问题或内存限制。
+## **📜 许可证**
+该项目是开源的，并遵循**MIT 许可证**进行使用。
+##  ❤️ 资料来源
+由 Yedp 创作。特别感谢 mizumori-bit（https://github.com/mizumori-bit/）在正交图/视图/光照实现方面的贡献。
