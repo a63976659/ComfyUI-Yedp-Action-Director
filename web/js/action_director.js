@@ -17,7 +17,7 @@ const loadThreeJS = async () => {
     return window._YEDP_THREE_CACHE = new Promise(async (resolve, reject) => {
         const baseUrl = new URL(".", import.meta.url).href;
         try {
-            console.log("[Yedp] Initializing Engine V9.21 (Offline Mode)...");
+            console.log("[Yedp] 正在初始化引擎 V9.21 (离线模式)...");
             
             const THREE = await import(new URL("./three.module.js", baseUrl).href);
 
@@ -40,7 +40,7 @@ const loadThreeJS = async () => {
 
             resolve({ THREE, OrbitControls, TransformControls, GLTFLoader, FBXLoader, BVHLoader, SkeletonUtils: { clone } });
         } catch (e) {
-            console.error("[Yedp] Critical Engine Load Failure:", e);
+            console.error("[Yedp] 引擎加载严重失败:", e);
             reject(e);
         }
     });
@@ -553,7 +553,7 @@ class YedpViewport {
             this.animate();
 
         } catch (e) {
-            this.container.innerHTML = `<div style="color:red; padding:20px;">Init Error: ${e.message}</div>`;
+            this.container.innerHTML = `<div style="color:red; padding:20px;">初始化错误: ${e.message}</div>`;
         }
     }
 
@@ -576,15 +576,20 @@ class YedpViewport {
         return tex;
     }
 
-    // --- COMfyUI STATE SERIALIZATION ---
+// --- COMfyUI STATE SERIALIZATION ---
     serializeScene() {
+        // 【关键修复】：加上安全保护。如果相机还没加载出来，直接返回空状态，防止报错卡死！
+        if (!this.camera || !this.controls || !this.isInitialized) {
+            return JSON.stringify({ version: 1, note: "initializing" });
+        }
+
         return JSON.stringify({
             version: 1,
             camera: {
-                pos: this.camera.position.toArray(),
-                rot: this.camera.rotation.toArray(),
-                target: this.controls.target.toArray(),
-                fov: this.perspCam.fov,
+                pos: this.camera.position ? this.camera.position.toArray() : [0, 1.2, 4],
+                rot: this.camera.rotation ? this.camera.rotation.toArray() : [0, 0, 0],
+                target: this.controls.target ? this.controls.target.toArray() : [0, 1, 0],
+                fov: this.perspCam ? this.perspCam.fov : 45,
                 isOrtho: this.isOrthographic,
                 camOverrideOffset: this.camOverrideOffset,
                 camOverrideScale: this.camOverrideScale,
@@ -621,7 +626,7 @@ class YedpViewport {
     async loadScene(stateStr) {
         if (!stateStr) return;
         try {
-            console.log("[Yedp] Loading saved scene state from ComfyUI Workflow...");
+            console.log("[Yedp] 正在从 ComfyUI 工作流加载已保存的场景状态...");
             const state = JSON.parse(stateStr);
             
             // 1. Wipe Defaults
@@ -748,7 +753,7 @@ class YedpViewport {
             this.forceUpdateFrame();
 
         } catch (e) {
-            console.error("[Yedp] Failed to load saved scene state:", e);
+            console.error("[Yedp] 加载保存的场景状态失败:", e);
         }
     }
 
@@ -773,23 +778,23 @@ class YedpViewport {
     setupHeader(div) {
         div.innerHTML = `
             <div style="display:flex; align-items:center; gap:8px;">
-                <label style="color:#ccc; font-size:11px; cursor:pointer;"><input type="checkbox" id="chk-shaded"> Shaded</label>
+                <label style="color:#ccc; font-size:11px; cursor:pointer;"><input type="checkbox" id="chk-shaded"> 着色 (Shaded)</label>
                 <div style="width:1px; height:16px; background:#444;"></div>
-                <label style="color:#ccc; font-size:11px; cursor:pointer;"><input type="checkbox" id="chk-depth"> Depth</label>
+                <label style="color:#ccc; font-size:11px; cursor:pointer;"><input type="checkbox" id="chk-depth"> 深度 (Depth)</label>
                 <div id="depth-ctrls" style="display:flex; align-items:center; gap:4px; opacity:0.5; transition:opacity 0.2s;">
-                    <span style="color:#4ade80; font-size:10px; font-weight:bold;">NEAR:</span>
+                    <span style="color:#4ade80; font-size:10px; font-weight:bold;">近端:</span>
                     <input id="inp-near" type="number" step="0.1" value="0.1" style="width:40px; background:#111; color:#4ade80; border:1px solid #4ade80; font-size:10px; padding:1px 2px; border-radius:2px; font-weight:bold;">
-                    <span style="color:#4ade80; font-size:10px; font-weight:bold; margin-left:4px;">FAR:</span>
+                    <span style="color:#4ade80; font-size:10px; font-weight:bold; margin-left:4px;">远端:</span>
                     <input id="inp-far" type="number" step="0.5" value="10.0" style="width:40px; background:#111; color:#4ade80; border:1px solid #4ade80; font-size:10px; padding:1px 2px; border-radius:2px; font-weight:bold;">
                 </div>
                 <div style="width:1px; height:16px; background:#444;"></div>
-                <label style="color:#666; font-size:11px; cursor:pointer;"><input type="checkbox" id="chk-skel" checked> Skel</label>
+                <label style="color:#666; font-size:11px; cursor:pointer;"><input type="checkbox" id="chk-skel" checked> 骨骼 (Skel)</label>
             </div>
             <div style="display:flex; gap:4px; align-items:center;">
                 <span id="lbl-res" style="color:#00d2ff; font-family:monospace; font-size:10px; margin-right:5px; align-self:center;">512x512</span>
-                <button id="btn-refresh" style="border:1px solid #4ade80; color:#4ade80; background:transparent; padding:0px 6px; font-size:10px; cursor:pointer; border-radius:3px;" title="Refresh Files">↻ SYNC FOLDERS</button>
-                <button id="btn-bake-frame" style="border:1px solid #ffaa00; color:#ffaa00; background:transparent; padding:0px 6px; font-size:10px; cursor:pointer; border-radius:3px;">BAKE FRAME</button>
-                <button id="btn-bake" style="border:1px solid #ff0055; color:#ff0055; background:transparent; padding:0px 6px; font-size:10px; cursor:pointer; border-radius:3px;">BAKE V9.21</button>
+                <button id="btn-refresh" style="border:1px solid #4ade80; color:#4ade80; background:transparent; padding:0px 6px; font-size:10px; cursor:pointer; border-radius:3px;" title="刷新文件列表">↻ 同步文件夹</button>
+                <button id="btn-bake-frame" style="border:1px solid #ffaa00; color:#ffaa00; background:transparent; padding:0px 6px; font-size:10px; cursor:pointer; border-radius:3px;">单帧烘焙</button>
+                <button id="btn-bake" style="border:1px solid #ff0055; color:#ff0055; background:transparent; padding:0px 6px; font-size:10px; cursor:pointer; border-radius:3px;">全部烘焙 V9.21</button>
             </div>
         `;
 
@@ -829,7 +834,7 @@ class YedpViewport {
         // NEW SYNC BUTTON LOGIC
         div.querySelector("#btn-refresh").onclick = async () => {
             const btn = div.querySelector("#btn-refresh");
-            btn.innerText = "SYNCING...";
+            btn.innerText = "同步中...";
             await this.fetchAnimations();
             await this.fetchEnvs();
             await this.fetchCams();
@@ -844,7 +849,7 @@ class YedpViewport {
                 this.availableCams.forEach(anim => selCam.add(new Option(anim, anim)));
                 selCam.value = this.availableCams.includes(currentVal) ? currentVal : "none";
             }
-            btn.innerText = "↻ SYNC FOLDERS";
+            btn.innerText = "↻ 同步文件夹";
         };
 
         div.querySelector("#btn-bake-frame").onclick = () => this.performBake(true);
@@ -939,10 +944,10 @@ class YedpViewport {
         const pathDeselect = `<line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line>`;
 
         panel.append(
-            createIconBtn("translate", pathMove, "Move (G)", () => { this.transformControls.setMode("translate"); this.updateGizmoUI("translate"); }),
-            createIconBtn("rotate", pathRot, "Rotate (R)", () => { this.transformControls.setMode("rotate"); this.updateGizmoUI("rotate"); }),
-            createIconBtn("scale", pathScale, "Scale (S)", () => { if(['character', 'environment'].includes(this.selected.type)) { this.transformControls.setMode("scale"); this.updateGizmoUI("scale"); } }),
-            createIconBtn("deselect", pathDeselect, "Deselect", () => { this.selectObject(null, null, null); })
+            createIconBtn("translate", pathMove, "移动 (G)", () => { this.transformControls.setMode("translate"); this.updateGizmoUI("translate"); }),
+            createIconBtn("rotate", pathRot, "旋转 (R)", () => { this.transformControls.setMode("rotate"); this.updateGizmoUI("rotate"); }),
+            createIconBtn("scale", pathScale, "缩放 (S)", () => { if(['character', 'environment'].includes(this.selected.type)) { this.transformControls.setMode("scale"); this.updateGizmoUI("scale"); } }),
+            createIconBtn("deselect", pathDeselect, "取消选择", () => { this.selectObject(null, null, null); })
         );
         vpDiv.appendChild(panel);
         this.updateGizmoUI("translate");
@@ -1011,10 +1016,10 @@ class YedpViewport {
             return b;
         };
         nav.append(
-            createViewBtn("TOP", "top"), createViewBtn("BTM", "bottom"),
-            createViewBtn("LEFT", "left"), createViewBtn("RIGHT", "right"), 
-            createViewBtn("FRONT", "front"), createViewBtn("BACK", "back"),
-            createViewBtn("RESET", "reset")
+            createViewBtn("顶视图", "top"), createViewBtn("底视图", "bottom"),
+            createViewBtn("左视图", "left"), createViewBtn("右视图", "right"), 
+            createViewBtn("前视图", "front"), createViewBtn("后视图", "back"),
+            createViewBtn("重置视角", "reset")
         );
         nav.lastChild.style.gridColumn = "1 / span 2";
         nav.lastChild.style.borderColor = "#555";
@@ -1065,7 +1070,7 @@ class YedpViewport {
         const iconEnv = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>`;
 
         // TRANSFORM
-        const transCol = createCollapsible(`${iconTransform} Transform`, true);
+        const transCol = createCollapsible(`${iconTransform} 变换 (Transform)`, true);
         const tRow = (lbl, keys) => {
             const r = document.createElement("div"); r.style.display = "flex"; r.style.gap = "4px"; r.style.alignItems = "center";
             const l = document.createElement("span"); l.innerText = lbl; l.style.width = "20px"; l.style.color = "#888"; r.appendChild(l);
@@ -1077,25 +1082,25 @@ class YedpViewport {
             });
             return r;
         };
-        transCol.content.append(tRow("Pos", ['px', 'py', 'pz']), tRow("Rot", ['rx', 'ry', 'rz']), tRow("Scl", ['sx', 'sy', 'sz']));
+        transCol.content.append(tRow("位置", ['px', 'py', 'pz']), tRow("旋转", ['rx', 'ry', 'rz']), tRow("缩放", ['sx', 'sy', 'sz']));
         this.uiSidebar.appendChild(transCol.wrap);
 
         // CAMERA
-        const camCol = createCollapsible(`${iconCamera} Camera`, false);
+        const camCol = createCollapsible(`${iconCamera} 相机 (Camera)`, false);
         const camSettingsRow = document.createElement("div");
         Object.assign(camSettingsRow.style, { display: "flex", gap: "6px", alignItems: "center", marginBottom: "4px", flexWrap: "wrap" });
-        const btnSelCam = createBtn("Select Cam", "#334", "#445");
+        const btnSelCam = createBtn("选择相机", "#334", "#445");
         btnSelCam.style.flex = "0 0 auto"; btnSelCam.onclick = () => this.selectObject(this.camera, 'camera', 'main');
 
         const lblOrtho = document.createElement("label");
         Object.assign(lblOrtho.style, { cursor: "pointer", display: "flex", gap: "4px", color: "#ccc", fontSize: "10px", alignItems: "center" });
         const chkOrtho = document.createElement("input"); chkOrtho.type = "checkbox"; chkOrtho.checked = this.isOrthographic;
         chkOrtho.id = "chk-ortho";
-        lblOrtho.append(chkOrtho, "Ortho");
+        lblOrtho.append(chkOrtho, "正交透视");
 
         const fovContainer = document.createElement("div");
         Object.assign(fovContainer.style, { display: "flex", gap: "4px", alignItems: "center", flex: "1", transition: "opacity 0.2s", minWidth: "0" });
-        const lblFov = document.createElement("span"); lblFov.innerText = "FOV"; Object.assign(lblFov.style, {fontSize: "10px", color: "#888"});
+        const lblFov = document.createElement("span"); lblFov.innerText = "视野(FOV)"; Object.assign(lblFov.style, {fontSize: "10px", color: "#888"});
         const sldFov = document.createElement("input"); sldFov.type = "range"; sldFov.min = 10; sldFov.max = 120; sldFov.value = this.perspCam.fov; 
         sldFov.id = "inp-cam-fov-sld";
         Object.assign(sldFov.style, { flex: "1", width: "0", minWidth: "30px" });
@@ -1126,26 +1131,27 @@ class YedpViewport {
         valFov.oninput = (e) => { sldFov.value = e.target.value; this.perspCam.fov = parseFloat(e.target.value); this.perspCam.updateProjectionMatrix(); this.forceUpdateFrame(); };
 
         const camRow1 = document.createElement("div"); camRow1.style.display = "flex"; camRow1.style.gap = "4px"; camRow1.style.marginBottom = "4px";
-        const btnSetStart = createBtn("Set Start"); const btnSetEnd = createBtn("Set End");
+        const btnSetStart = createBtn("设为起点"); const btnSetEnd = createBtn("设为终点");
         btnSetStart.onclick = () => {
             this.camKeys.start = { pos: this.camera.position.clone(), quat: this.camera.quaternion.clone(), target: this.controls.target.clone(), zoom: this.camera.zoom };
-            btnSetStart.innerText = "Start Set ✓"; btnSetStart.style.borderColor = "#0f0";
+            btnSetStart.innerText = "起点已设 ✓"; btnSetStart.style.borderColor = "#0f0";
         };
         btnSetEnd.onclick = () => {
             this.camKeys.end = { pos: this.camera.position.clone(), quat: this.camera.quaternion.clone(), target: this.controls.target.clone(), zoom: this.camera.zoom };
-            btnSetEnd.innerText = "End Set ✓"; btnSetEnd.style.borderColor = "#0f0";
+            btnSetEnd.innerText = "终点已设 ✓"; btnSetEnd.style.borderColor = "#0f0";
         };
         
         const camRow2 = document.createElement("div"); camRow2.style.display = "flex"; camRow2.style.gap = "4px";
         const selEase = document.createElement("select");
         Object.assign(selEase.style, { flex: "1", background: "#111", color: "#fff", border: "1px solid #444", borderRadius: "3px", fontSize: "10px", padding: "2px" });
-        ['linear', 'easeIn', 'easeOut', 'easeInOut'].forEach(e => selEase.add(new Option(e, e)));
+        const easeTexts = {'linear':'线性', 'easeIn':'缓入', 'easeOut':'缓出', 'easeInOut':'平滑'};
+        ['linear', 'easeIn', 'easeOut', 'easeInOut'].forEach(e => selEase.add(new Option(easeTexts[e], e)));
         selEase.onchange = (e) => { this.camKeys.ease = e.target.value; this.forceUpdateFrame(); };
-        const btnClearCam = createBtn("Clear Keyframes", "#522", "#733");
+        const btnClearCam = createBtn("清除关键帧", "#522", "#733");
         btnClearCam.onclick = () => {
             this.camKeys.start = null; this.camKeys.end = null;
-            btnSetStart.innerText = "Set Start"; btnSetStart.style.borderColor = "#555";
-            btnSetEnd.innerText = "Set End"; btnSetEnd.style.borderColor = "#555";
+            btnSetStart.innerText = "设为起点"; btnSetStart.style.borderColor = "#555";
+            btnSetEnd.innerText = "设为终点"; btnSetEnd.style.borderColor = "#555";
         };
         camRow1.append(btnSetStart, btnSetEnd); camRow2.append(selEase, btnClearCam);
 
@@ -1164,7 +1170,7 @@ class YedpViewport {
             this.controls.enabled = !this.isCameraOverride;
             this.forceUpdateFrame();
         };
-        lblOverride.append(chkOverride, "Override");
+        lblOverride.append(chkOverride, "覆盖控制");
 
         const selCamAnim = document.createElement("select");
         selCamAnim.id = "sel-cam-anim";
@@ -1201,8 +1207,8 @@ class YedpViewport {
         this.uiSidebar.appendChild(camCol.wrap);
 
         // LIGHTING
-        const lightCol = createCollapsible(`${iconLighting} Lighting`, false);
-        const btnAddLight = createBtn("+ Add Light", "#542", "#653");
+        const lightCol = createCollapsible(`${iconLighting} 灯光 (Lighting)`, false);
+        const btnAddLight = createBtn("+ 添加灯光", "#542", "#653");
         btnAddLight.style.flex = "none"; btnAddLight.style.padding = "2px 6px"; btnAddLight.style.fontSize = "9px";
         btnAddLight.onclick = (e) => { e.stopPropagation(); this.addLight(); };
         lightCol.head.appendChild(btnAddLight);
@@ -1212,8 +1218,8 @@ class YedpViewport {
         this.uiSidebar.appendChild(lightCol.wrap);
 
         // CHARACTERS
-        const charCol = createCollapsible(`${iconChars} Characters`, true);
-        const btnAddChar = createBtn("+ Add Char", "#252", "#373");
+        const charCol = createCollapsible(`${iconChars} 角色 (Characters)`, true);
+        const btnAddChar = createBtn("+ 添加角色", "#252", "#373");
         btnAddChar.style.flex = "none"; btnAddChar.style.padding = "2px 6px"; btnAddChar.style.fontSize = "9px";
         btnAddChar.onclick = (e) => { e.stopPropagation(); this.addCharacter(); };
         charCol.head.appendChild(btnAddChar);
@@ -1223,8 +1229,8 @@ class YedpViewport {
         this.uiSidebar.appendChild(charCol.wrap);
 
         // ENVIRONMENTS
-        const envCol = createCollapsible(`${iconEnv} Environments`, true);
-        const btnAddEnv = createBtn("+ Add Env", "#353", "#474");
+        const envCol = createCollapsible(`${iconEnv} 环境 (Environments)`, true);
+        const btnAddEnv = createBtn("+ 添加环境", "#353", "#474");
         btnAddEnv.style.flex = "none"; btnAddEnv.style.padding = "2px 6px"; btnAddEnv.style.fontSize = "9px";
         btnAddEnv.onclick = (e) => { e.stopPropagation(); this.addEnvironment(); };
         envCol.head.appendChild(btnAddEnv);
@@ -1390,7 +1396,7 @@ class YedpViewport {
                 this.cameraAction.play();
                 
                 this.cameraAnimNode = animTarget.getObjectByProperty('isCamera', true) || animTarget;
-                console.log("[Yedp] Bound custom animated camera tracking to:", this.cameraAnimNode.name);
+                console.log("[Yedp] 自定义相机动画已绑定至:", this.cameraAnimNode.name);
                 this.forceUpdateFrame();
             }
         } catch(e) { console.error("Camera Anim Load Error:", e); }
@@ -1465,7 +1471,8 @@ class YedpViewport {
             const head = document.createElement("div"); head.style.display = "flex"; head.style.justifyContent = "space-between"; head.style.marginBottom = "4px";
             const selType = document.createElement("select");
             Object.assign(selType.style, { background: "#111", color: "#fff", border: "1px solid #444", borderRadius: "3px", fontSize: "10px", padding: "1px" });
-            ['ambient', 'directional', 'point', 'spot'].forEach(t => selType.add(new Option(t, t)));
+            const lightTexts = {'ambient':'环境光', 'directional':'平行光', 'point':'点光源', 'spot':'聚光灯'};
+            ['ambient', 'directional', 'point', 'spot'].forEach(t => selType.add(new Option(lightTexts[t], t)));
             selType.value = l.type; selType.onchange = (e) => { l.type = e.target.value; this.updateLightType(l); this.renderLightCards(); };
             
             const btnDel = document.createElement("button"); btnDel.innerText = "X"; Object.assign(btnDel.style, { background: "#622", color: "#fff", border: "1px solid #555", borderRadius: "2px", cursor: "pointer", fontSize: "9px" }); btnDel.onclick = () => this.removeLight(l.id);
@@ -1476,18 +1483,18 @@ class YedpViewport {
 
             const inpCol = document.createElement("input"); inpCol.type = "color"; inpCol.value = l.color; inpCol.style.width = "100%"; inpCol.style.height = "16px"; inpCol.style.padding = "0"; inpCol.style.border = "none"; inpCol.onchange = (e) => { l.color = e.target.value; this.updateLightType(l); };
             const inpInt = document.createElement("input"); inpInt.type = "number"; inpInt.step = "0.1"; inpInt.value = l.intensity; Object.assign(inpInt.style, { width:"100%", background:"#111", color:"#fff", border:"1px solid #444", fontSize:"10px" }); inpInt.onchange = (e) => { l.intensity = parseFloat(e.target.value); this.updateLightType(l); };
-            ctrls.append(wrap("Col", inpCol), wrap("Int", inpInt));
+            ctrls.append(wrap("颜色", inpCol), wrap("强度", inpInt));
 
             if (l.type === 'point' || l.type === 'spot') {
-                const inpRng = document.createElement("input"); inpRng.type = "number"; inpRng.step = "1"; inpRng.value = l.range; Object.assign(inpRng.style, { width:"100%", background:"#111", color:"#fff", border:"1px solid #444", fontSize:"10px" }); inpRng.onchange = (e) => { l.range = parseFloat(e.target.value); this.updateLightType(l); }; ctrls.append(wrap("Rng", inpRng));
+                const inpRng = document.createElement("input"); inpRng.type = "number"; inpRng.step = "1"; inpRng.value = l.range; Object.assign(inpRng.style, { width:"100%", background:"#111", color:"#fff", border:"1px solid #444", fontSize:"10px" }); inpRng.onchange = (e) => { l.range = parseFloat(e.target.value); this.updateLightType(l); }; ctrls.append(wrap("范围", inpRng));
             }
             if (l.type === 'spot') {
-                const inpAng = document.createElement("input"); inpAng.type = "number"; inpAng.step = "1"; inpAng.value = l.angle; Object.assign(inpAng.style, { width:"100%", background:"#111", color:"#fff", border:"1px solid #444", fontSize:"10px" }); inpAng.onchange = (e) => { l.angle = parseFloat(e.target.value); this.updateLightType(l); }; ctrls.append(wrap("Ang", inpAng));
+                const inpAng = document.createElement("input"); inpAng.type = "number"; inpAng.step = "1"; inpAng.value = l.angle; Object.assign(inpAng.style, { width:"100%", background:"#111", color:"#fff", border:"1px solid #444", fontSize:"10px" }); inpAng.onchange = (e) => { l.angle = parseFloat(e.target.value); this.updateLightType(l); }; ctrls.append(wrap("角度", inpAng));
             }
             if (l.type !== 'ambient') {
                 const lblShad = document.createElement("label"); lblShad.style.fontSize="9px"; lblShad.style.color="#ccc"; lblShad.style.display="flex"; lblShad.style.gap="2px"; lblShad.style.alignItems="center";
                 const chkShad = document.createElement("input"); chkShad.type = "checkbox"; chkShad.checked = l.castShadow; chkShad.onchange = (e) => { l.castShadow = e.target.checked; this.updateLightType(l); };
-                lblShad.append(chkShad, "Shadows"); ctrls.append(lblShad);
+                lblShad.append(chkShad, "阴影"); ctrls.append(lblShad);
             }
             card.append(head, ctrls); this.uiLightList.appendChild(card);
         });
@@ -1515,14 +1522,14 @@ class YedpViewport {
 
     async loadEnvironmentFile(envObj, filename) {
         const info = this.container.querySelector(`#env-mesh-info-${envObj.id}`);
-        if(info) info.innerText = `[Loading...]`;
+        if(info) info.innerText = `[加载中...]`;
 
         if(!filename || filename === "none") {
             envObj.group.clear();
             envObj.meshes = [];
             envObj.mixer.stopAllAction();
             envObj.action = null;
-            if(info) info.innerText = `[Meshes: 0]`;
+            if(info) info.innerText = `[网格: 0]`;
             this.forceUpdateFrame();
             return;
         }
@@ -1562,7 +1569,7 @@ class YedpViewport {
                 }
             });
             
-            if(info) info.innerText = `[Meshes: ${envObj.meshes.length}]`;
+            if(info) info.innerText = `[网格: ${envObj.meshes.length}]`;
 
             let clip = isFBX ? model.animations?.[0] : (model.animations?.[0] || model.scene?.animations?.[0] || model.asset?.animations?.[0]);
             if(clip) {
@@ -1580,7 +1587,7 @@ class YedpViewport {
             const lbl = this.container.querySelector(`#env-dur-${envObj.id}`);
             if (lbl) {
                 const fps = this.getWidgetValue("fps", 24);
-                lbl.innerText = envObj.duration > 0 ? `${Math.floor(envObj.duration * fps)}f` : "Static";
+                lbl.innerText = envObj.duration > 0 ? `${Math.floor(envObj.duration * fps)}f` : "静止";
             }
             
             this.updateVisibilities();
@@ -1589,7 +1596,7 @@ class YedpViewport {
         } catch(e) { 
             console.error("Env Load Error:", e); 
             envObj.group.clear();
-            if(info) info.innerHTML = `<span style="color:red;">[Load Error]</span>`;
+            if(info) info.innerHTML = `<span style="color:red;">[加载错误]</span>`;
         }
     }
 
@@ -1605,7 +1612,7 @@ class YedpViewport {
             };
 
             const head = document.createElement("div"); head.style.display = "flex"; head.style.justifyContent = "space-between"; head.style.marginBottom = "2px";
-            head.innerHTML = `<span style="font-weight:bold; font-size:12px;">Env ${e.id}</span>`;
+            head.innerHTML = `<span style="font-weight:bold; font-size:12px;">环境 ${e.id}</span>`;
             
             const btnDel = document.createElement("button"); btnDel.innerText = "X"; Object.assign(btnDel.style, { background: "#622", color: "#fff", border: "1px solid #555", borderRadius: "2px", cursor: "pointer", fontSize: "9px" }); btnDel.onclick = () => this.removeEnvironment(e.id);
             head.appendChild(btnDel);
@@ -1615,7 +1622,7 @@ class YedpViewport {
             meshInfo.style.color = "#888";
             meshInfo.style.marginBottom = "4px";
             meshInfo.id = `env-mesh-info-${e.id}`;
-            meshInfo.innerText = `[Meshes: ${e.meshes.length}]`;
+            meshInfo.innerText = `[网格: ${e.meshes.length}]`;
             
             const selEnv = document.createElement("select");
             Object.assign(selEnv.style, { width: "100%", background: "#111", color: "#fff", border: "1px solid #444", borderRadius: "3px", fontSize: "10px", padding: "2px", marginBottom: "4px" });
@@ -1627,11 +1634,11 @@ class YedpViewport {
             const lblLoop = document.createElement("label"); lblLoop.style.cursor = "pointer"; lblLoop.style.display = "flex"; lblLoop.style.gap = "2px";
             const chkLoop = document.createElement("input"); chkLoop.type = "checkbox"; chkLoop.checked = e.loop;
             chkLoop.onchange = (evt) => { e.loop = evt.target.checked; if(e.action) { e.action.setLoop(e.loop ? this.THREE.LoopRepeat : this.THREE.LoopOnce); e.action.clampWhenFinished = !e.loop; }};
-            lblLoop.append(chkLoop, "Loop (Anim)");
+            lblLoop.append(chkLoop, "循环 (动画)");
             
             const lblDur = document.createElement("span");
             const fps = this.getWidgetValue("fps", 24);
-            lblDur.innerText = e.duration > 0 ? `${Math.floor(e.duration * fps)}f` : "Static";
+            lblDur.innerText = e.duration > 0 ? `${Math.floor(e.duration * fps)}f` : "静止";
             lblDur.id = `env-dur-${e.id}`; lblDur.style.color = "#888"; lblDur.style.fontFamily = "monospace";
             
             foot.append(lblLoop, lblDur);
@@ -1654,7 +1661,7 @@ class YedpViewport {
             };
 
             const head = document.createElement("div"); head.style.display = "flex"; head.style.justifyContent = "space-between"; head.style.marginBottom = "2px";
-            head.innerHTML = `<span style="font-weight:bold; font-size:12px;">Char ${c.id}</span>`;
+            head.innerHTML = `<span style="font-weight:bold; font-size:12px;">角色 ${c.id}</span>`;
             
             const btnDel = document.createElement("button"); btnDel.innerText = "X"; Object.assign(btnDel.style, { background: "#622", color: "#fff", border: "1px solid #555", borderRadius: "2px", cursor: "pointer", fontSize: "9px" }); btnDel.onclick = () => this.removeCharacter(c.id);
             head.appendChild(btnDel);
@@ -1663,7 +1670,7 @@ class YedpViewport {
             meshInfo.style.fontSize = "9px";
             meshInfo.style.color = "#888";
             meshInfo.style.marginBottom = "4px";
-            meshInfo.innerText = `[M:${c.depthMeshesM.length} | F:${c.depthMeshesF.length} | Pose:${c.poseMeshes.length}]`;
+            meshInfo.innerText = `[男:${c.depthMeshesM.length} | 女:${c.depthMeshesF.length} | 姿势:${c.poseMeshes.length}]`;
             
             const selAnim = document.createElement("select");
             Object.assign(selAnim.style, { width: "100%", background: "#111", color: "#fff", border: "1px solid #444", borderRadius: "3px", fontSize: "10px", padding: "2px", marginBottom: "4px" });
@@ -1680,7 +1687,7 @@ class YedpViewport {
             const lblLoop = document.createElement("label"); lblLoop.style.cursor = "pointer"; lblLoop.style.display = "flex"; lblLoop.style.gap = "2px";
             const chkLoop = document.createElement("input"); chkLoop.type = "checkbox"; chkLoop.checked = c.loop;
             chkLoop.onchange = (e) => { c.loop = e.target.checked; if(c.action) { c.action.setLoop(c.loop ? this.THREE.LoopRepeat : this.THREE.LoopOnce); c.action.clampWhenFinished = !c.loop; }};
-            lblLoop.append(chkLoop, "Loop"); loopBox.append(btnGender, lblLoop);
+            lblLoop.append(chkLoop, "循环"); loopBox.append(btnGender, lblLoop);
 
             const lblDur = document.createElement("span");
             const fps = this.getWidgetValue("fps", 24);
@@ -1693,7 +1700,7 @@ class YedpViewport {
     }
 
     addCharacter() {
-        if (this.characters.length >= 16) { alert("Maximum 16 characters recommended for WebGL performance."); return; }
+        if (this.characters.length >= 16) { alert("为了保证 WebGL 性能，建议最多添加 16 个角色。"); return; }
         this.charCounter++;
         const newChar = new CharacterInstance(this.charCounter, this.baseRig, this.THREE);
         this.scene.add(newChar.scene); this.scene.add(newChar.skeletonHelper);
@@ -1716,7 +1723,7 @@ class YedpViewport {
 
     async loadAnimationForChar(charObj, filename) {
         const lbl = this.container.querySelector(`#dur-${charObj.id}`);
-        if (lbl) lbl.innerText = "Loading...";
+        if (lbl) lbl.innerText = "加载中...";
 
         if(!filename || filename === "none") {
             charObj.animFile = filename;
@@ -1771,7 +1778,7 @@ class YedpViewport {
             }
         } catch(e) { 
             console.error("Anim Load Error:", e); 
-            if (lbl) lbl.innerHTML = `<span style="color:red;">Error</span>`;
+            if (lbl) lbl.innerHTML = `<span style="color:red;">错误</span>`;
         }
     }
 
@@ -1901,21 +1908,22 @@ class YedpViewport {
         this.camera.updateProjectionMatrix();
     }
 
+    // 关键修改点 2：将尺寸钩子中的组件名称映射为中文，保持画布实时同步
     hookNodeWidgets() {
         const updateDim = (w, val) => {
-            if(w && w.name === "width") this.renderWidth = val; 
-            else if(w && w.name === "height") this.renderHeight = val;
+            if(w && w.name === "宽度") this.renderWidth = val; 
+            else if(w && w.name === "高度") this.renderHeight = val;
             const lbl = this.container.querySelector("#lbl-res");
             if(lbl) lbl.innerText = `${this.renderWidth}x${this.renderHeight}`;
             this.onResize(this.container.querySelector(".yedp-vp-area"));
         };
-        const wWidget = this.node.widgets?.find(w => w.name === "width");
-        const hWidget = this.node.widgets?.find(w => w.name === "height");
+        const wWidget = this.node.widgets?.find(w => w.name === "宽度");
+        const hWidget = this.node.widgets?.find(w => w.name === "高度");
         if(wWidget) { this.renderWidth = wWidget.value; const orig = wWidget.callback; wWidget.callback = v => { updateDim(wWidget, v); if(orig) orig(v); }; }
         if(hWidget) { this.renderHeight = hWidget.value; const orig = hWidget.callback; hWidget.callback = v => { updateDim(hWidget, v); if(orig) orig(v); }; }
         updateDim();
         const slider = this.container.querySelector("#t-slider");
-        const fWidget = this.node.widgets?.find(w => w.name === "frame_count");
+        const fWidget = this.node.widgets?.find(w => w.name === "总帧数");
         if(fWidget && slider) {
             slider.max = fWidget.value;
             const orig = fWidget.callback; fWidget.callback = v => { slider.max = v; if(orig) orig(v); };
@@ -1943,17 +1951,27 @@ class YedpViewport {
         }
     }
 
+    // 关键修改点 1：中英文名称自动映射
     getWidgetValue(name, defaultVal) {
-        const w = this.node.widgets?.find(x => x.name === name); return w ? w.value : defaultVal;
+        const nameMap = {
+            "width": "宽度",
+            "height": "高度",
+            "frame_count": "总帧数",
+            "fps": "帧率",
+            "client_data": "客户端数据"
+        };
+        const targetName = nameMap[name] || name;
+        const w = this.node.widgets?.find(x => x.name === targetName); 
+        return w ? w.value : defaultVal;
     }
 
     async performBake(isSingleFrame = false) {
-        if (this.characters.length === 0 && this.environments.length === 0) { alert("Scene is empty!"); return; }
+        if (this.characters.length === 0 && this.environments.length === 0) { alert("场景为空！"); return; }
         const THREE = this.THREE;
         
         const btnId = isSingleFrame ? '#btn-bake-frame' : '#btn-bake';
-        const originalBtnText = isSingleFrame ? 'BAKE FRAME' : 'BAKE V9.21';
-        const btn = this.container.querySelector(btnId); btn.innerText = "PREPARING...";
+        const originalBtnText = isSingleFrame ? '单帧烘焙' : '全部烘焙 V9.21';
+        const btn = this.container.querySelector(btnId); btn.innerText = "准备中...";
         
         this.isBaking = true; this.isPlaying = false;
         
@@ -2050,7 +2068,7 @@ class YedpViewport {
             const time = actualFrame * step;
             const timeRatio = totalNodeFrames > 1 ? actualFrame / (totalNodeFrames - 1) : 0;
             
-            btn.innerText = `BAKING ${idx+1}/${framesToRender}`;
+            btn.innerText = `烘焙中 ${idx+1}/${framesToRender}`;
             
             this.evaluateAnimations(time);
             this.characters.forEach(c => c.scene.updateMatrixWorld(true));
@@ -2102,8 +2120,9 @@ class YedpViewport {
         this.updateVisibilities();
         this.characters.forEach(c => { c.skeletonHelper.visible = visSkel; });
         
-        btn.innerText = "UPLOADING...";
-        const clientDataWidget = this.node.widgets.find(w => w.name === "client_data");
+        // 关键修改点 3：寻找包含最终数据的中文字段
+        btn.innerText = "上传数据中...";
+        const clientDataWidget = this.node.widgets.find(w => w.name === "客户端数据");
         if (clientDataWidget) {
             try {
                 const response = await api.fetchApi("/yedp/upload_payload", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(results) });
@@ -2111,12 +2130,12 @@ class YedpViewport {
                 const resData = await response.json();
                 clientDataWidget.value = resData.payload_id;
             } catch (err) {
-                console.error("[Yedp] Memory cache upload failed, falling back to local string:", err);
+                console.error("[Yedp] 内存缓存上传失败，回退到本地字符串:", err);
                 clientDataWidget.value = JSON.stringify(results);
             }
         }
         
-        btn.innerText = "BAKE (DONE)";
+        btn.innerText = "烘焙完成";
         setTimeout(() => { btn.innerText = originalBtnText; }, 2000);
     }
 }
@@ -2130,10 +2149,17 @@ app.registerExtension({
                 const r = onNodeCreated ? onNodeCreated.apply(this, arguments) : undefined;
                 const container = document.createElement("div");
                 container.classList.add("yedp-container");
-                container.style.width = "100%"; container.style.height = "100%"; 
+                // 宽度保持 100% 动态填充，内部基础高度增加 100，改为 600px
+                container.style.width = "100%"; 
+                container.style.height = "600px"; 
                 
                 const widget = this.addDOMWidget("3d_viewport", "vp", container, { serialize: false, hideOnZoom: false });
-                widget.computeSize = (w) => [w, 0];
+                
+                // 【核心修复：打破死循环，且还原动态宽度 w】
+                // 向引擎上报原始宽度 w，并将画布最小高度锁定为 600
+                widget.computeSize = function(w) {
+                    return [w, 600]; 
+                };
                 
                 setTimeout(() => {
                     const vp = new YedpViewport(this, container);
@@ -2143,15 +2169,25 @@ app.registerExtension({
                         if (onResizeOrig) onResizeOrig.call(this, size);
                         let usedHeight = 30; 
                         if (this.widgets) for (const w of this.widgets) { if (w === widget) break; usedHeight += w.last_h || 26; }
-                        const safeHeight = Math.max(10, size[1] - usedHeight - 35);
-                        container.style.height = safeHeight + "px"; container.style.maxHeight = "none";
+                        const safeHeight = Math.max(100, size[1] - usedHeight - 35);
+                        container.style.height = safeHeight + "px"; 
+                        container.style.maxHeight = "none";
                         vp.onResize(container.querySelector(".yedp-vp-area"));
                     };
-                    const w = this.widgets?.find(w => w.name === "client_data");
-                    if (w?.inputEl) w.inputEl.style.display = "none";
+                    
+                    const w = this.widgets?.find(w => w.name === "客户端数据");
+                    if (w?.inputEl) {
+                        w.inputEl.style.display = "none";
+                        w.computeSize = () => [0, -4]; // 抹平隐藏输入框留下的白边
+                    }
+                    
+                    // 只在节点刚创建（高度不足）时，赋予初始尺寸
+                    // 宽度保持原本的 720，高度增加 100 变为 700
+                    if (this.size[1] < 650) {
+                        this.setSize([720, 700]);
+                        if (app.graph) app.graph.setDirtyCanvas(true, true);
+                    }
                 }, 100);
-                
-                this.setSize([720, 600]);
                 
                 this.onRemoved = function() {
                     if (this.vp) {
@@ -2163,11 +2199,10 @@ app.registerExtension({
                 return r;
             };
 
-            // NEW: Native ComfyUI Serialization logic!
             const onSerializeOrig = nodeType.prototype.onSerialize;
             nodeType.prototype.onSerialize = function (o) {
                 if (onSerializeOrig) onSerializeOrig.apply(this, arguments);
-                if (this.vp) {
+                if (this.vp && this.vp.isInitialized) {
                     o.scene_state = this.vp.serializeScene();
                 }
             };
@@ -2177,7 +2212,6 @@ app.registerExtension({
                 if (onConfigureOrig) onConfigureOrig.apply(this, arguments);
                 if (o.scene_state) {
                     this.saved_scene_state = o.scene_state;
-                    // If the viewport has loaded early, apply it. Else, viewport init() will apply it.
                     if (this.vp && this.vp.isInitialized) {
                         this.vp.loadScene(this.saved_scene_state);
                     }
